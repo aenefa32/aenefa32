@@ -16,28 +16,29 @@ const kpi=(label,val,sub,cls,id)=>h('div',{class:'kpi',id:id||null},h('span',{cl
 const row=(a,b,cls)=>h('div',{class:'mini'},h('span',null,a),h('span',{class:cls||''},b));
 // ---------- form Catat ----------
 function addForm(r,done,opt){opt=opt||{};ui.sheet(opt.title||'Catat',(b,close)=>{const err=h('div');b.appendChild(err);
- let kind='out',amt=0;const kinds=opt.onlyOut?[['out','Pengeluaran']]:[['out','Pengeluaran'],['in','Pemasukan'],['transfer','Transfer']];
- const am=ui.money(0,n=>{amt=n;},{'aria-label':'Nominal',id:'cf-amt'}),dt=h('input',{type:'date',id:'cf-date',value:ui.today(),'aria-label':'Tanggal'}),
-  acc=ui.select(ACCTS.map(a=>[a,a]),'BCA',{id:'cf-acc','aria-label':'Rekening'}),to=ui.select(ACCTS.map(a=>[a,a]),'Tunai',{id:'cf-to','aria-label':'Rekening tujuan'}),
-  cat=h('select',{id:'cf-cat','aria-label':'Kategori'}),ds=ui.text({id:'cf-desc',maxlength:'200',placeholder:'mis. Mika 100 pcs (boleh kosong)','aria-label':'Keterangan'}),pt=ui.text({id:'cf-party',maxlength:'100',placeholder:'mis. Toko Kain Jaya (boleh kosong)','aria-label':'Pihak terkait'});
+ const E=opt.edit||null;let kind=E?E.kind:'out',amt=E?E.amount:0;const kinds=E?[[E.kind,'']]:opt.onlyOut?[['out','Pengeluaran']]:[['out','Pengeluaran'],['in','Pemasukan'],['transfer','Transfer']];
+ const am=ui.money(amt,n=>{amt=n;},{'aria-label':'Nominal',id:'cf-amt'}),dt=h('input',{type:'date',id:'cf-date',value:E?E.date:ui.today(),'aria-label':'Tanggal'}),
+  acc=ui.select(ACCTS.map(a=>[a,a]),E?E.account:'BCA',{id:'cf-acc','aria-label':'Rekening'}),to=ui.select(ACCTS.map(a=>[a,a]),E&&E.to_account?E.to_account:'Tunai',{id:'cf-to','aria-label':'Rekening tujuan'}),
+  cat=h('select',{id:'cf-cat','aria-label':'Kategori'}),ds=ui.text({id:'cf-desc',value:E?E.desc||'':'',maxlength:'200',placeholder:'mis. Mika 100 pcs (boleh kosong)','aria-label':'Keterangan'}),pt=ui.text({id:'cf-party',value:E?E.party||'':'',maxlength:'100',placeholder:'mis. Toko Kain Jaya (boleh kosong)','aria-label':'Pihak terkait'});
  const chips=h('div',{class:'chips',role:'group','aria-label':'Jenis',id:'cf-kinds'}),dyn=h('div');
- function drawCats(){cat.textContent='';(r.categories||[]).filter(c=>c.direction===kind).sort((x,y)=>(x.prive?1:0)-(y.prive?1:0)).forEach(c=>cat.appendChild(h('option',{value:c.category_id},c.name)));}
+ function drawCats(){cat.textContent='';(r.categories||[]).filter(c=>c.direction===kind).sort((x,y)=>(x.prive?1:0)-(y.prive?1:0)).forEach(c=>cat.appendChild(h('option',{value:c.category_id},c.name)));
+  if(E&&E.cat_id&&!(r.categories||[]).some(c=>c.category_id===E.cat_id)&&kind===E.kind)cat.appendChild(h('option',{value:E.cat_id},E.category||'Kategori lama'));if(E&&E.cat_id&&kind===E.kind)cat.value=E.cat_id;}
  function draw(){chips.textContent='';kinds.forEach(k=>chips.appendChild(h('button',{class:'chip','data-k':k[0],type:'button','aria-pressed':String(kind===k[0]),onclick:()=>{kind=k[0];draw();}},k[1])));
   dyn.textContent='';drawCats();
   if(kind==='transfer'){dyn.appendChild(h('div',{class:'grid2'},ui.field('Dari rekening',acc),ui.field('Ke rekening',to)));dyn.appendChild(ui.field('Catatan (boleh kosong)',ds));}
   else{dyn.appendChild(ui.field(kind==='in'?'Masuk ke rekening':'Dibayar dari rekening',acc));dyn.appendChild(ui.field('Kategori',cat));dyn.appendChild(ui.field('Keterangan',ds));dyn.appendChild(ui.field('Pihak terkait',pt));}}
- if(!opt.onlyOut)b.appendChild(chips);b.appendChild(ui.field('Nominal (Rp)',am));b.appendChild(ui.field('Tanggal',dt));b.appendChild(dyn);draw();
+ if(!opt.onlyOut&&!E)b.appendChild(chips);b.appendChild(ui.field('Nominal (Rp)',am));b.appendChild(ui.field('Tanggal',dt));b.appendChild(dyn);draw();
  const go=h('button',{class:'btn pri',type:'button',id:'cf-save'},'Simpan');
  go.addEventListener('click',()=>{if(!(amt>0)){ui.banner(err,'Nominal harus lebih dari 0.');return;}
   if(kind!=='transfer'&&!cat.value){ui.banner(err,'Pilih kategori. Tambahkan di Pengaturan Cashflow bila belum ada.');return;}
   if(kind==='transfer'&&acc.value===to.value){ui.banner(err,'Rekening asal dan tujuan tidak boleh sama.');return;}
-  ui.run(go,async()=>{await api('cash.add',{kind:kind,amount:amt,date:dt.value,account:acc.value,to_account:to.value,category_id:kind==='transfer'?'':cat.value,description:ds.value.trim(),party:kind==='transfer'?'':pt.value.trim()});close();A.toast('Tercatat');done();},m=>ui.banner(err,m));});
+  ui.run(go,async()=>{await api(E?'cash.update':'cash.add',{txn_id:E?E.id:undefined,kind:kind,amount:amt,date:dt.value,account:acc.value,to_account:to.value,category_id:kind==='transfer'?'':cat.value,description:ds.value.trim(),party:kind==='transfer'?'':pt.value.trim()});close();A.toast(E?'Perubahan disimpan':'Tercatat');done();},m=>ui.banner(err,m));});
  b.appendChild(go);});}
-function txLine(t){const pos=t.kind==='pay'||t.kind==='in',tr=t.kind==='transfer';
+function txLine(t,r){const pos=t.kind==='pay'||t.kind==='in',tr=t.kind==='transfer';
   const sub=dLabel(t.date)+' · '+(tr?t.account+' → '+t.to_account:t.account)+' · '+t.sub;
   const amtEl=h('span',{class:tr?'':(t.prive?'cf-prv':(pos?'cf-in':'cf-out'))},(tr?'':(pos?'+ ':'- '))+rp(t.amount));
-  return h('div',{class:'tx'+(t.prive?' prv':''),'data-kind':t.kind},h('div',{class:'txm'},h('b',null,t.title),h('small',{class:'sub'},sub)),h('div',{class:'txa'},amtEl,t.can_void?h('button',{class:'linkbtn',type:'button','aria-label':'Batalkan '+t.title,onclick:async()=>{const c=await ui.confirm({title:'Batalkan catatan?',message:t.title+' · '+rp(t.amount)+'. Catatan tidak dihapus, hanya ditandai batal dan saldo dikembalikan.',reason:{label:'Alasan pembatalan',required:true},okText:'Batalkan catatan',danger:true});if(!c)return;
-    try{await api('cash.void',{txn_id:t.id,reason:c.reason});A.toast('Dibatalkan');A.render();}catch(e){A.toast(e.message);}}},'Batalkan'):null));}
+  return h('div',{class:'tx'+(t.prive?' prv':''),'data-kind':t.kind},h('div',{class:'txm'},h('b',null,t.title),h('small',{class:'sub'},sub)),h('div',{class:'txa'},amtEl,t.can_void?h('div',{class:'txb'},h('button',{class:'linkbtn','data-act':'edit',type:'button','aria-label':'Ubah '+t.title,onclick:()=>addForm(r,()=>A.render(),{edit:t,title:'Ubah catatan'})},'Ubah'),h('button',{class:'linkbtn dng','data-act':'del',type:'button','aria-label':'Hapus '+t.title,onclick:async()=>{const c=await ui.confirm({title:'Hapus catatan?',message:t.title+' · '+rp(t.amount)+'. Saldo rekening dikembalikan. Catatan disimpan sebagai riwayat di spreadsheet.',reason:{label:'Alasan (boleh kosong)'},okText:'Hapus',danger:true});if(!c)return;
+    try{await api('cash.void',{txn_id:t.id,reason:c.reason});A.toast('Dihapus');A.render();}catch(e){A.toast(e.message);}}},'Hapus')):null));}
 // ---------- halaman Cashflow ----------
 async function vCash(el,my){
  let cur=S.cfPeriod||'month';const box=h('div');
@@ -63,7 +64,7 @@ async function vCash(el,my){
  box.appendChild(h('h2',{class:'sec'},'Transaksi'));
  const list=h('div',{class:'card',id:'cf-list'});
  if(!r.recent.length)list.appendChild(h('p',{class:'sub',id:'cf-empty'},'Belum ada transaksi pada periode ini. Ketuk + untuk mencatat pengeluaran, pemasukan, atau transfer.'));
- r.recent.forEach(t=>list.appendChild(txLine(t)));
+ r.recent.forEach(t=>list.appendChild(txLine(t,r)));
  if(r.total_recent>r.recent.length)list.appendChild(h('p',{class:'sub'},'Menampilkan '+r.recent.length+' dari '+r.total_recent+' transaksi terbaru. Persempit periode untuk melihat yang lain.'));
  box.appendChild(list);
  box.appendChild(h('div',{class:'card menu',style:'margin-top:14px'},h('a',{href:'#/cashset',id:'cf-setlink'},'Pengaturan Cashflow (saldo awal & kategori)',h('span',null,'›'))));
@@ -86,7 +87,7 @@ async function vExp(el,my){
  if(names.length>1)box.appendChild(h('div',{class:'chips',id:'ex-filter',role:'group','aria-label':'Kategori'},...[['','Semua']].concat(names.map(n=>[n,n])).map(c=>h('button',{class:'chip',type:'button','data-cat':c[0],'aria-pressed':String(cf===c[0]),onclick:()=>{S.exCat=c[0];A.render();}},c[1]))));
  const list=h('div',{class:'card',id:'ex-list'}),rows=r.recent.filter(t=>!cf||(t.category||'Lainnya')===cf);
  if(!rows.length)list.appendChild(h('p',{class:'sub',id:'ex-empty'},'Belum ada pengeluaran pada periode ini. Ketuk "+ Tambah pengeluaran" untuk mencatat.'));
- rows.forEach(t=>list.appendChild(txLine(t)));
+ rows.forEach(t=>list.appendChild(txLine(t,r)));
  if(r.total_recent>r.recent.length)list.appendChild(h('p',{class:'sub'},'Menampilkan '+r.recent.length+' dari '+r.total_recent+' catatan terbaru. Persempit periode untuk melihat yang lain.'));
  box.appendChild(list);
  box.appendChild(h('p',{class:'sub'},'Prive (setoran ke tabungan owner) mengurangi saldo rekening tetapi tidak dihitung sebagai biaya usaha, jadi laba bersih tetap menunjukkan hasil usaha.'));}
