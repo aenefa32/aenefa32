@@ -28,6 +28,6 @@ async function vSettings(el){const owner=S.boot.user.role==='owner',s=S.boot.set
   ui.run(go,async()=>{const r=await api('settings.save',{settings:p});S.boot.settings=r.settings;ui.banner(errBox,'');A.toast('Pengaturan disimpan');A.render();},m=>ui.banner(errBox,m));});
  el.appendChild(go);
  el.appendChild(h('div',{class:'card menu',style:'margin-top:14px'},h('a',{href:'#/import'},'Impor Data Historis',h('span',null,'›'))));
- el.appendChild(h('p',{class:'sub'},'AeneFlow · R1. Google Calendar dan PDF hadir di rilis berikutnya.'));}
+ el.appendChild(h('p',{class:'sub'},'AeneFlow · R2. Manajemen pesanan, Cashflow, dan Google Calendar hadir di rilis berikutnya.'));}
 A.ROUTES.settings={t:'Settings',nav:'more',back:'more',v:vSettings};
 });

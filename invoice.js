@@ -119,7 +119,7 @@ function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='o
  if(iv.state==='Draft')add('Hapus Draft','danger',async()=>{const r=await ui.confirm({title:'Hapus draf?',message:'Draf '+iv.invoice_number+' akan dihapus. Nomor invoice ini tidak dipakai ulang.',danger:true,okText:'Hapus Draft',cancelText:'Kembali'});if(!r)return;
   try{await api('invoices.delete_draft',{invoice_id:iv.invoice_id,ver:v.ver});A.toast('Draf dihapus');location.hash='#/home';}catch(e){ui.banner(errBox,e.message);}},'b-del');
  el.appendChild(bar);
- el.appendChild(h('button',{class:'btn',type:'button',disabled:true,title:'Tersedia di rilis berikutnya (R2)',style:'margin:0 0 12px'},'PDF & WhatsApp — segera (R2)'));
+ if(iv.state!=='Cancelled')el.appendChild(h('button',{class:'btn',type:'button',id:'b-pdf',style:'margin:0 0 12px',onclick:()=>A.shareSheet(v)},'PDF & WhatsApp'));
  // item
  el.appendChild(h('h2',{class:'sec'},'Item'));
  v.items.forEach(i=>el.appendChild(h('div',{class:'item'},h('div',{class:'row'},h('b',null,i.name),h('b',null,rp(Math.round(i.qty*i.unit_price)))),i.description?h('div',{class:'sub'},i.description):null,h('div',{class:'sub'},i.qty+' '+i.unit+' × '+rp(i.unit_price)))));
