@@ -118,59 +118,60 @@ function shareSheet(v){const iv=v.invoice;let url='';
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
 
-// ---- Surat Pesanan untuk tim produksi (TANPA harga, diskon, pajak, pembayaran, modal, laba) ----
-// Hanya membaca: nama/deskripsi/qty/satuan item, ongkir & biaya tambahan (nama+qty saja), catatan invoice, alamat penerima.
-async function buildSurat(v,s,opt){
- const P=window.PDFLib;if(!P)throw new Error('Modul PDF belum termuat. Muat ulang halaman lalu coba lagi.');
- s=s||{};const iv=v.invoice,toJakarta=opt.dest==='jakarta';
- const doc=await P.PDFDocument.create();doc.setTitle('Surat Pesanan '+clean(iv.invoice_number));doc.setProducer('AeneFlow');doc.setCreator('AeneFlow');
- const F=await doc.embedFont(P.StandardFonts.Helvetica),B=await doc.embedFont(P.StandardFonts.HelveticaBold);
- const W=595.28,H=841.89,M=48,R=W-M,CW=W-2*M;
- const rose=P.rgb(.545,.286,.353),ink=P.rgb(.2,.18,.18),mute=P.rgb(.46,.42,.42),ln=P.rgb(.9,.84,.85),blush=P.rgb(.98,.94,.94);
- let page,y;
- const np=()=>{page=doc.addPage([W,H]);page.drawRectangle({x:0,y:H-12,width:W,height:12,color:rose});y=H-M-6;};
- const tx=(str,x,yy,size,font,color,right)=>{str=clean(str);if(!str)return;page.drawText(str,{x:right?x-font.widthOfTextAtSize(str,size):x,y:yy,size:size,font:font,color:color||ink});};
- const need=hh=>{if(y-hh<M+30){np();return true;}return false;};
- np();
- let logo=null,lw=0,lh=0;const lm=/^data:image\/(png|jpeg);base64,([A-Za-z0-9+\/]+={0,2})$/.exec(s.business_logo||'');
- if(lm){try{const bin=Uint8Array.from(atob(lm[2]),c=>c.charCodeAt(0));logo=lm[1]==='png'?await doc.embedPng(bin):await doc.embedJpg(bin);const sc=Math.min(64/logo.width,64/logo.height);lw=logo.width*sc;lh=logo.height*sc;}catch(e){logo=null;lw=lh=0;}}
- const tl=M+(logo?lw+14:0);if(logo)page.drawImage(logo,{x:M,y:y-lh,width:lw,height:lh});
- let ly=y-(logo?Math.max(8,lh/2-8):8);tx(s.business_name||'Surat Pesanan',tl,ly,18,B,rose);ly-=16;
- [].concat(wrap(F,9,s.business_address||'',270-(tl-M)),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'']).forEach(l=>{if(l){tx(l,tl,ly,9,F,mute);ly-=12;}});
- let ry=y-8;tx('SURAT PESANAN',R,ry,20,B,ink,true);ry-=16;tx('No. Ref '+iv.invoice_number,R,ry,10,B,rose,true);ry-=14;
- y=Math.min(ly,ry,logo?y-lh:1e9)-10;page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
- // kotak: tanggal pesanan (kiri) & kirim ke (kanan)
- const lines=[];
- if(toJakarta){lines.push([s.business_name||'',B,11.5]);wrap(F,9,s.business_address||'',250).forEach(l=>lines.push([l,F,9]));if(s.business_phone)lines.push(['WA '+waShow(s.business_phone),F,9]);}
- else{lines.push([iv.cust_name||'',B,11.5]);if(iv.cust_org)lines.push([iv.cust_org,F,9.5]);wrap(F,9,iv.cust_address||'',250).forEach(l=>{if(l)lines.push([l,F,9]);});if(iv.cust_whatsapp)lines.push(['WA '+waShow(iv.cust_whatsapp),F,9]);}
- const bh=Math.max(52,28+lines.length*12+6),bx=M+170,bw=R-bx;
- page.drawRectangle({x:M,y:y-bh,width:160,height:bh,borderColor:ln,borderWidth:.8});page.drawRectangle({x:bx,y:y-bh,width:bw,height:bh,borderColor:ln,borderWidth:.8});
- tx('TANGGAL PESANAN',M+10,y-15,8,B,mute);tx(dstr(iv.issue_date),M+10,y-31,11.5,B,ink);
- tx('KIRIM KE',bx+10,y-15,8,B,mute);let by=y-31;lines.forEach((l,k)=>{tx(l[0],bx+10,by,l[2],l[1],k===0?ink:(l[1]===B?ink:mute));by-=(k===0?14:12);});
- y-=bh+22;
- // tabel item (tanpa harga)
- const cNo=M+8,cDesc=M+34,cQty=R-8,dW=cQty-cDesc-90;
- const head=()=>{page.drawRectangle({x:M,y:y-17,width:CW,height:22,color:blush});tx('NO',cNo,y-9,8,B,mute);tx('ITEM & SPESIFIKASI',cDesc,y-9,8,B,mute);tx('JUMLAH',cQty,y-9,8,B,mute,true);y-=28;};
- head();
- const rowsOut=v.items.map(i=>({name:i.name,desc:i.description||'',qty:String(i.qty)+' '+(i.unit||'')}));
- A.extrasOf(iv).forEach(l=>{if(l&&l.name&&Number(l.unit_price)>=0)rowsOut.push({name:l.name,desc:'',qty:String(l.qty)+' pcs'});});
- rowsOut.forEach((i,k)=>{const nm=wrap(B,10,i.name,dW),ds=i.desc?wrap(F,9,i.desc,dW):[],hh=nm.length*13+ds.length*11+10;
-  if(need(hh+8))head();
-  let yy=y;tx(String(k+1),cNo,yy,9,F,mute);nm.forEach(l=>{tx(l,cDesc,yy,10,B,ink);yy-=13;});ds.forEach(l=>{tx(l,cDesc,yy,9,F,mute);yy-=11;});
-  tx(i.qty.trim(),cQty,y,10,B,ink,true);y-=hh;page.drawLine({start:{x:M,y:y+4},end:{x:R,y:y+4},thickness:.4,color:ln});y-=6;});
- y-=10;
- const para=(label,txt)=>{if(!String(txt||'').trim())return;const ls=wrap(F,9.5,txt,CW);need(26);tx(label,M,y,8,B,mute);y-=14;ls.forEach(l=>{need(13);tx(l,M,y,9.5,F,ink);y-=12;});y-=8;};
- para('CATATAN PRODUKSI',iv.notes);
- // deadline & pengiriman
+// ---- Surat Pesanan untuk tim produksi: gambar JPEG lebar A4 (2480 px), TANPA harga/diskon/pajak/pembayaran/modal/laba ----
+// Hanya membaca: nama/deskripsi/qty/satuan item, biaya tambahan (nama+qty saja), catatan invoice, alamat penerima.
+async function suratJpeg(v,s,opt){
+ s=s||{};const iv=v.invoice,toJakarta=opt.dest==='jakarta',PW=2480,W=595.28,H=841.89,K=PW/W,M=48,R=W-M,CW=W-2*M;
+ const FONT='Helvetica, Arial, sans-serif',rose='#8b495a',ink='#2e2929',mute='#756b6b',ln='#e6d5d9',blush='#faf2f4';
+ const fnt=(b,sz)=>(b?'bold ':'')+sz+'px '+FONT;
+ let logo=null;if(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/]+={0,2}$/.test(s.business_logo||'')){try{logo=await loadImg(s.business_logo);}catch(e){logo=null;}}
+ const items=v.items.map(i=>({name:String(i.name||''),desc:i.description||'',qty:(String(i.qty)+' '+(i.unit||'')).trim()}));
+ A.extrasOf(iv).forEach(l=>{if(l&&l.name&&Number(l.unit_price)>=0)items.push({name:String(l.name),desc:'',qty:String(l.qty)+' pcs'});});
  const ship=toJakarta?'Dikirim ke alamat '+(s.business_name||'kami')+' di Jakarta':'Dikirim langsung ke alamat pelanggan';
- const sl=wrap(B,10.5,ship,CW-28),bh2=44+sl.length*13;need(bh2+10);
- page.drawRectangle({x:M,y:y-bh2,width:CW,height:bh2,color:blush});page.drawRectangle({x:M,y:y-bh2,width:4,height:bh2,color:rose});
- tx('DEADLINE PRODUKSI',M+16,y-15,8,B,mute);tx(dstr(opt.deadline),M+16,y-31,14,B,ink);
- tx('PENGIRIMAN',M+210,y-15,8,B,mute);let sy=y-31;sl.forEach(l=>{tx(l,M+210,sy,10.5,B,ink);sy-=13;});
- y-=bh2+10;
- const pages=doc.getPages();pages.forEach((pg,k)=>{if(pages.length>1){const pn=(k+1)+'/'+pages.length;pg.drawText(pn,{x:R-F.widthOfTextAtSize(pn,8),y:26,size:8,font:F,color:mute});}});
- return doc.save();}
-function suratName(v){return safeName(v).replace(/^Invoice-/,'SuratPesanan-');}
+ const draw=(c,dry)=>{
+  const tx=(str,x,y,sz,b,col,right)=>{str=String(str==null?'':str);if(dry||!str)return;c.font=fnt(b,sz);c.fillStyle=col||ink;c.textAlign=right?'right':'left';c.textBaseline='alphabetic';c.fillText(str,x,y);};
+  const rect=(x,y,w,h,fill,stroke)=>{if(dry)return;if(fill){c.fillStyle=fill;c.fillRect(x,y,w,h);}if(stroke){c.strokeStyle=stroke;c.lineWidth=.8;c.strokeRect(x,y,w,h);}};
+  const line=(x1,y,x2,col,w)=>{if(dry)return;c.strokeStyle=col;c.lineWidth=w||.5;c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke();};
+  const wrapC=(text,sz,b,maxW)=>{c.font=fnt(b,sz);const out=[];String(text||'').replace(/\r/g,'').split('\n').forEach(par=>{let ln_='';par.split(' ').forEach(w=>{
+    while(c.measureText(w).width>maxW){let k=w.length;while(k>1&&c.measureText(w.slice(0,k)).width>maxW)k--;if(ln_){out.push(ln_);ln_='';}out.push(w.slice(0,k));w=w.slice(k);}
+    const t=ln_?ln_+' '+w:w;if(ln_&&c.measureText(t).width>maxW){out.push(ln_);ln_=w;}else ln_=t;});out.push(ln_);});return out;};
+  rect(0,0,W,12,rose);
+  let y=M-6;
+  let lw=0,lh=0;if(logo){const sc=Math.min(64/logo.width,64/logo.height);lw=logo.width*sc;lh=logo.height*sc;if(!dry)c.drawImage(logo,M,y,lw,lh);}
+  const tl=M+(logo?lw+14:0);let ly=y+(logo?Math.max(8,lh/2-8):8)+10;
+  tx(s.business_name||'Surat Pesanan',tl,ly,18,true,rose);ly+=16;
+  [].concat(wrapC(s.business_address||'',9,false,270-(tl-M)),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):'']).forEach(l=>{if(l){tx(l,tl,ly,9,false,mute);ly+=12;}});
+  let ry=y+18;tx('SURAT PESANAN',R,ry,20,true,ink,true);ry+=16;tx('No. Ref '+iv.invoice_number,R,ry,10,true,rose,true);ry+=14;
+  y=Math.max(ly,ry,logo?y+lh:0)+4;line(M,y,R,ln,.8);y+=22;
+  // kotak: tanggal pesanan & kirim ke
+  const L=[];
+  if(toJakarta){L.push([s.business_name||'',true,11.5]);wrapC(s.business_address||'',9,false,250).forEach(l=>{if(l)L.push([l,false,9]);});if(s.business_phone)L.push(['WA '+waShow(s.business_phone),false,9]);}
+  else{L.push([iv.cust_name||'',true,11.5]);if(iv.cust_org)L.push([iv.cust_org,false,9.5]);wrapC(iv.cust_address||'',9,false,250).forEach(l=>{if(l)L.push([l,false,9]);});if(iv.cust_whatsapp)L.push(['WA '+waShow(iv.cust_whatsapp),false,9]);}
+  const bh=Math.max(52,28+L.length*12+6),bx=M+170,bw=R-bx;
+  rect(M,y,160,bh,null,ln);rect(bx,y,bw,bh,null,ln);
+  tx('TANGGAL PESANAN',M+10,y+15,8,true,mute);tx(dstr(iv.issue_date),M+10,y+31,11.5,true,ink);
+  tx('KIRIM KE',bx+10,y+15,8,true,mute);let by=y+31;L.forEach((l,k)=>{tx(l[0],bx+10,by,l[2],l[1],(k===0||l[1])?ink:mute);by+=(k===0?14:12);});
+  y+=bh+22;
+  // tabel item (tanpa harga)
+  const cNo=M+8,cDesc=M+34,cQty=R-8,dW=cQty-cDesc-90;
+  rect(M,y,CW,22,blush);tx('NO',cNo,y+14,8,true,mute);tx('ITEM & SPESIFIKASI',cDesc,y+14,8,true,mute);tx('JUMLAH',cQty,y+14,8,true,mute,true);y+=30;
+  items.forEach((i,k)=>{const nm=wrapC(i.name,10,true,dW),ds=i.desc?wrapC(i.desc,9,false,dW):[],hh=nm.length*13+ds.length*11+10;
+   let yy=y+10;tx(String(k+1),cNo,yy,9,false,mute);nm.forEach(l=>{tx(l,cDesc,yy,10,true,ink);yy+=13;});ds.forEach(l=>{tx(l,cDesc,yy,9,false,mute);yy+=11;});
+   tx(i.qty,cQty,y+10,10,true,ink,true);y+=hh;line(M,y+2,R,ln,.5);y+=6;});
+  y+=10;
+  if(String(iv.notes||'').trim()){tx('CATATAN PRODUKSI',M,y+8,8,true,mute);y+=22;wrapC(iv.notes,9.5,false,CW).forEach(l=>{tx(l,M,y,9.5,false,ink);y+=12;});y+=8;}
+  y+=8;
+  // deadline & pengiriman
+  const sl=wrapC(ship,10.5,true,CW-210-14),bh2=44+sl.length*13;
+  rect(M,y,CW,bh2,blush);rect(M,y,4,bh2,rose);
+  tx('DEADLINE PRODUKSI',M+16,y+15,8,true,mute);tx(dstr(opt.deadline),M+16,y+33,14,true,ink);
+  tx('PENGIRIMAN',M+210,y+15,8,true,mute);let sy=y+31;sl.forEach(l=>{tx(l,M+210,sy,10.5,true,ink);sy+=13;});
+  y+=bh2;return y;};
+ const m=document.createElement('canvas').getContext('2d');const endY=draw(m,true),HT=Math.max(300,Math.ceil(endY+M*.8));
+ const cv=document.createElement('canvas');cv.width=PW;cv.height=Math.round(HT*K);const c=cv.getContext('2d');c.scale(K,K);c.fillStyle='#fff';c.fillRect(0,0,W,HT);draw(c,false);
+ const blob=await new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('Gagal membuat gambar')),'image/jpeg',.92));
+ return{blob:blob,width:cv.width,height:cv.height};}
+function suratName(v){return safeName(v).replace(/^Invoice-/,'SuratPesanan-').replace(/\.pdf$/,'.jpg');}
 function suratSheet(v){const iv=v.invoice;let url='';
  if(iv.state==='Cancelled'){A.toast('Invoice dibatalkan tidak bisa dibuatkan surat pesanan.');return;}
  ui.sheet('Surat Pesanan untuk Tim',(b,close)=>{
@@ -178,26 +179,27 @@ function suratSheet(v){const iv=v.invoice;let url='';
   const dest=ui.select([['customer','Langsung ke alamat pelanggan'],['jakarta','Ke alamat usaha di Jakarta']],'customer',{id:'sp-dest','aria-label':'Pengiriman hasil produksi'});
   const err=h('div'),box=h('div');
   b.appendChild(h('div',{class:'sub'},iv.invoice_number+' · '+(iv.cust_name||'')));
-  b.appendChild(ui.field('Deadline produksi',dl));b.appendChild(ui.field('Pengiriman hasil produksi',dest,'Menentukan alamat di kotak "Kirim ke" pada PDF.'));
+  b.appendChild(ui.field('Deadline produksi',dl));b.appendChild(ui.field('Pengiriman hasil produksi',dest,'Menentukan alamat di kotak "Kirim ke" pada gambar.'));
   b.appendChild(err);
   b.appendChild(h('button',{class:'btn pri',type:'button',id:'sp-go',onclick:async ev=>{
    err.textContent='';box.textContent='';if(!dl.value){ui.banner(err,'Isi deadline produksi dulu.');return;}
-   const btn=ev.currentTarget;btn.disabled=true;btn.textContent='Membuat PDF…';
+   const btn=ev.currentTarget;btn.disabled=true;btn.textContent='Membuat gambar…';
    try{
     const s=await A.api('bootstrap').then(r=>(r&&r.settings?(S.boot.settings=r.settings):S.boot.settings)||{},()=>S.boot.settings||{});
-    const bytes=await buildSurat(v,s,{dest:dest.value,deadline:dl.value});
+    const r=await suratJpeg(v,s,{dest:dest.value,deadline:dl.value});
     if(url){try{URL.revokeObjectURL(url);}catch(e){}}
-    const name=suratName(v),blob=new Blob([bytes],{type:'application/pdf'});url=URL.createObjectURL(blob);
-    let file=null;try{file=new File([blob],name,{type:'application/pdf'});}catch(e){}
+    const name=suratName(v);url=URL.createObjectURL(r.blob);
+    let file=null;try{file=new File([r.blob],name,{type:'image/jpeg'});}catch(e){}
     const canShare=!!(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]}));
-    box.appendChild(h('div',{class:'sub',id:'sp-status',role:'status'},'PDF siap: '+name+' ('+Math.max(1,Math.round(bytes.length/1024))+' KB)'));
+    box.appendChild(h('div',{class:'sub',id:'sp-status',role:'status'},'Gambar siap: '+name+' ('+Math.max(1,Math.round(r.blob.size/1024))+' KB)'));
+    box.appendChild(h('img',{id:'sp-img',src:url,alt:'Pratinjau surat pesanan '+(iv.cust_name||''),style:'width:100%;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:#fff'}));
     const row=h('div',{class:'btnrow wrapb'});
-    if(canShare)row.appendChild(h('button',{class:'btn pri',type:'button',id:'sp-share',onclick:async()=>{try{await navigator.share({files:[file],title:name});}catch(e){if(e&&e.name!=='AbortError')A.toast('Gagal membuka menu bagikan. Coba Unduh PDF.');}}},'Bagikan ke WhatsApp'));
-    row.appendChild(h('a',{class:'btn'+(canShare?'':' pri'),id:'sp-dl-a',href:url,download:name},'Unduh PDF'));
+    if(canShare)row.appendChild(h('button',{class:'btn pri',type:'button',id:'sp-share',onclick:async()=>{try{await navigator.share({files:[file],title:name});}catch(e){if(e&&e.name!=='AbortError')A.toast('Gagal membuka menu bagikan. Coba Unduh JPEG.');}}},'Bagikan ke WhatsApp'));
+    row.appendChild(h('a',{class:'btn'+(canShare?'':' pri'),id:'sp-dl-a',href:url,download:name},'Unduh JPEG'));
     box.appendChild(row);
-    if(!canShare)box.appendChild(h('div',{class:'sub',style:'margin-top:8px'},'Perangkat ini tidak mendukung berbagi file langsung. Unduh PDF, lalu lampirkan di WhatsApp tim.'));
-   }catch(e){ui.banner(err,'Gagal membuat PDF: '+(e&&e.message||e));}
-   btn.disabled=false;btn.textContent='Buat PDF';}},'Buat PDF'));
+    if(!canShare)box.appendChild(h('div',{class:'sub',style:'margin-top:8px'},'Perangkat ini tidak mendukung berbagi file langsung. Unduh JPEG, lalu lampirkan di WhatsApp tim.'));
+   }catch(e){ui.banner(err,'Gagal membuat gambar: '+(e&&e.message||e));}
+   btn.disabled=false;btn.textContent='Buat gambar';}},'Buat gambar'));
   b.appendChild(box);
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
@@ -268,6 +270,6 @@ function jalanSheet(v){const iv=v.invoice;let url='';
   }).catch(e=>{status.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},'Gagal membuat gambar: '+(e&&e.message||e)));});
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
-A.pdf={build:build,jalanJpeg:jalanJpeg,jalanModel:jalanModel,buildSurat:buildSurat,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
+A.pdf={build:build,jalanJpeg:jalanJpeg,jalanModel:jalanModel,suratJpeg:suratJpeg,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
 A.shareSheet=shareSheet;A.suratSheet=suratSheet;A.jalanSheet=jalanSheet;
 });
