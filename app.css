@@ -113,3 +113,9 @@ a.item.lnk{text-decoration:none;cursor:pointer}a.item.lnk:hover{border-color:var
 .exadd{margin-top:8px}.exadd select{width:100%}
 
 .mark-img{display:block;margin:0 auto 6px;width:72px;height:72px;border-radius:22%;box-shadow:0 6px 18px rgba(156,95,112,.25)}
+
+/* reports */
+.rp-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rp-kpis .kpi b{font-size:clamp(14px,4.4vw,18px);display:block;margin:2px 0}.warnv{color:#9A3E52}
+.rp-bars{display:flex;align-items:flex-end;gap:10px;min-height:150px;padding:6px 2px 0}.rp-bars>div{flex:1;text-align:center;min-width:0}.rp-bars i{display:block;border-radius:8px 8px 3px 3px;background:linear-gradient(#C98A9C,#9C5F70);margin:0 auto 4px;max-width:46px}.rp-bars small{display:block;font-size:10px;color:#8a7f83;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid #f1e8eb}.card>.mini:first-child{border-top:0}.mini span:last-child{font-weight:600;white-space:nowrap}
+.bar2{height:6px;border-radius:4px;background:#F0DCE2}.bar2 i{display:block;height:6px;border-radius:4px;background:#9C5F70}
