@@ -14,6 +14,8 @@ function wrap(font,size,text,maxW){const out=[];clean(text).split('\n').forEach(
   while(font.widthOfTextAtSize(w,size)>maxW){let k=w.length;while(k>1&&font.widthOfTextAtSize(w.slice(0,k),size)>maxW)k--;if(line){out.push(line);line='';}out.push(w.slice(0,k));w=w.slice(k);}
   const t=line?line+' '+w:w;if(line&&font.widthOfTextAtSize(t,size)>maxW){out.push(line);line=w;}else line=t;});out.push(line);});return out;}
 function safeName(v){const iv=v.invoice;const s=(iv.invoice_number+'-'+(iv.cust_name||'')).replace(/[^A-Za-z0-9._-]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');return 'Invoice-'+(s||'AeneFlow')+'.pdf';}
+// Google Sheets bisa membuang angka 0 di depan nomor; untuk tampilan, nomor lokal yang diawali 8 dikembalikan menjadi 08…
+function waShow(raw){const t=String(raw==null?'':raw).trim();return /^[\d\s-]+$/.test(t)&&/^8/.test(t)?'0'+t:t;}
 function banks(s){try{const a=JSON.parse((s&&s.bank_accounts)||'[]');return Array.isArray(a)?a:[];}catch(e){return[];}}
 const STATUS={Paid:'LUNAS','Partially Paid':'DIBAYAR SEBAGIAN',Unpaid:'BELUM DIBAYAR',Overdue:'JATUH TEMPO',Draft:'DRAFT',Cancelled:'DIBATALKAN'};
 
@@ -32,16 +34,20 @@ async function build(v,s){
  const need=hh=>{if(y-hh<M+34){np();return true;}return false;};
  np();
  // kepala: usaha (kiri) & judul invoice (kanan)
- let ly=y-8;tx(s.business_name||'Invoice',M,ly,20,B,rose);ly-=17;
- [].concat(wrap(F,9,s.business_address||'',270),[s.business_phone?('Telp/WA '+s.business_phone):'',s.business_email||'']).forEach(l=>{if(l){tx(l,M,ly,9,F,mute);ly-=12;}});
+ // logo usaha (opsional): gagal dibaca = diabaikan, PDF tetap jadi tanpa logo
+ let logo=null,lw=0,lh=0;const lm=/^data:image\/(png|jpeg);base64,([A-Za-z0-9+\/]+={0,2})$/.exec(s.business_logo||'');
+ if(lm){try{const bin=Uint8Array.from(atob(lm[2]),c=>c.charCodeAt(0));logo=lm[1]==='png'?await doc.embedPng(bin):await doc.embedJpg(bin);const sc=Math.min(64/logo.width,64/logo.height);lw=logo.width*sc;lh=logo.height*sc;}catch(e){logo=null;lw=lh=0;}}
+ const tl=M+(logo?lw+14:0);if(logo)page.drawImage(logo,{x:M,y:y-lh,width:lw,height:lh});
+ let ly=y-(logo?Math.max(8,lh/2-8):8);tx(s.business_name||'Invoice',tl,ly,20,B,rose);ly-=17;
+ [].concat(wrap(F,9,s.business_address||'',270-(tl-M)),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_email||'']).forEach(l=>{if(l){tx(l,tl,ly,9,F,mute);ly-=12;}});
  let ry=y-8;tx('INVOICE',R,ry,22,B,ink,true);ry-=17;tx(iv.invoice_number,R,ry,11,B,rose,true);ry-=15;
  const st=STATUS[v.payment_status]||STATUS[iv.state]||'';if(st){tx(st,R,ry,9.5,B,v.payment_status==='Paid'?good:mute,true);ry-=13;}
- y=Math.min(ly,ry)-10;page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
+ y=Math.min(ly,ry,logo?y-lh:1e9)-10;page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
  // pelanggan & tanggal
  const top=y;tx('DITAGIHKAN KEPADA',M,y,8,B,mute);y-=14;tx(iv.cust_name,M,y,11.5,B,ink);y-=14;
  if(iv.cust_org){tx(iv.cust_org,M,y,9.5,F,ink);y-=12;}
  wrap(F,9,iv.cust_address||'',250).forEach(l=>{if(l){tx(l,M,y,9,F,mute);y-=12;}});
- if(iv.cust_whatsapp){tx('WA '+iv.cust_whatsapp,M,y,9,F,mute);y-=12;}
+ if(iv.cust_whatsapp){tx('WA '+waShow(iv.cust_whatsapp),M,y,9,F,mute);y-=12;}
  let dy=top;tx('Tanggal terbit',R-110,dy,8.5,F,mute,true);tx(dstr(iv.issue_date),R,dy,9.5,B,ink,true);dy-=15;tx('Jatuh tempo',R-110,dy,8.5,F,mute,true);tx(dstr(iv.due_date),R,dy,9.5,B,ink,true);
  y=Math.min(y,dy)-16;
  // tabel item

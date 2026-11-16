@@ -75,3 +75,7 @@ a.item.lnk{text-decoration:none;cursor:pointer}a.item.lnk:hover{border-color:var
 .editor,.card,.item,.row>div{min-width:0}.row>*{min-width:0}.big,.item b{overflow-wrap:anywhere}
 @media(min-width:900px){.ov{align-items:center}.sheet{border-radius:22px;max-width:480px}.stick{bottom:0}.grid3{grid-template-columns:1fr 1fr 1.6fr}}
 #d-total{white-space:nowrap}
+/* R2 logo usaha di Pengaturan */
+.logo-prev{max-width:128px;max-height:128px;border-radius:12px;border:1px solid var(--line);background:#fff;display:block;margin-bottom:10px}
+.filebtn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.filein{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0}
