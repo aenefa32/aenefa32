@@ -58,7 +58,7 @@ function readFile(file){return new Promise((res,rej)=>{const fr=new FileReader()
 function mount(host,cfg){const api=cfg.api,S={kind:'invoices',file:null,book:null,table:null,fields:null,meta:null,mapping:{},options:{date_order:'dmy',paid_without_detail:'none',fulfillment_default:'Completed',create_customers:true,include_mismatch:false,tolerance:0},preview:null,busy:'',err:'',report:null,history:null};
  const call=async(a,p)=>{S.err='';try{return await api(a,p||{});}catch(e){S.err=String(e.message||e);throw e;}};
  async function ensureMeta(){if(!S.meta)S.meta=await call('import.fields');S.fields=S.meta.fields[S.kind];}
- async function onFile(f){S.file=f;S.preview=null;S.report=null;try{S.book=await readFile(f);useSheet(S.book.sheets[0]);}catch(e){S.err=e.message;}draw();}
+ async function onFile(f){S.file=f;S.preview=null;S.report=null;try{S.err='';await ensureMeta();S.book=await readFile(f);useSheet(S.book.sheets[0]);}catch(e){S.err=e.message;}draw();}
  function useSheet(n){S.sheet=n;S.table=toTable(S.book.get(n));S.mapping=suggest(S.fields,S.table.headers);S.preview=null;}
  const payload=()=>({kind:S.kind,headers:S.table.headers,rows:S.table.rows,src_rows:S.table.src,mapping:S.mapping,options:S.options,filename:S.file?S.file.name:''});
  async function runPreview(){S.busy='Memeriksa data (tidak ada yang ditulis)...';draw();try{S.preview=await call('import.preview',payload());}catch(e){}S.busy='';draw();}
@@ -116,6 +116,6 @@ function mount(host,cfg){const api=cfg.api,S={kind:'invoices',file:null,book:nul
     c3.appendChild(el('label',{class:'check'},el('input',{type:'checkbox',onchange:e=>{o.include_mismatch=e.target.checked;S.preview=null;}}),'Tetap impor invoice yang totalnya berselisih'));}
    c2.appendChild(c3);c2.appendChild(el('div',{style:'margin-top:10px'},el('button',{class:'pri',disabled:!!S.busy,onclick:runPreview},'3. Periksa (pratinjau)')));root_.appendChild(c2);}
   const pv=viewPreview();if(pv)root_.appendChild(pv);const rp_=viewReport();if(rp_)root_.appendChild(rp_);root_.appendChild(viewHistory());}
- ensureMeta().then(draw).catch(draw);draw();}
+ ensureMeta().then(draw).catch(e=>{S.err=e.message||String(e);draw();});draw();}
 root.AeneImport={mount:mount,core:core};
 })(typeof window!=='undefined'?window:globalThis);
