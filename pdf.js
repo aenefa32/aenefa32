@@ -39,7 +39,7 @@ async function build(v,s){
  if(lm){try{const bin=Uint8Array.from(atob(lm[2]),c=>c.charCodeAt(0));logo=lm[1]==='png'?await doc.embedPng(bin):await doc.embedJpg(bin);const sc=Math.min(64/logo.width,64/logo.height);lw=logo.width*sc;lh=logo.height*sc;}catch(e){logo=null;lw=lh=0;}}
  const tl=M+(logo?lw+14:0);if(logo)page.drawImage(logo,{x:M,y:y-lh,width:lw,height:lh});
  let ly=y-(logo?Math.max(8,lh/2-8):8);tx(s.business_name||'Invoice',tl,ly,20,B,rose);ly-=17;
- [].concat(wrap(F,9,s.business_address||'',270-(tl-M)),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_email||'']).forEach(l=>{if(l){tx(l,tl,ly,9,F,mute);ly-=12;}});
+ [].concat(wrap(F,9,s.business_address||'',270-(tl-M)),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_email||'',s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):'']).forEach(l=>{if(l){tx(l,tl,ly,9,F,mute);ly-=12;}});
  let ry=y-8;tx('INVOICE',R,ry,22,B,ink,true);ry-=17;tx(iv.invoice_number,R,ry,11,B,rose,true);ry-=15;
  const st=STATUS[v.payment_status]||STATUS[iv.state]||'';if(st){tx(st,R,ry,9.5,B,v.payment_status==='Paid'?good:mute,true);ry-=13;}
  y=Math.min(ly,ry,logo?y-lh:1e9)-10;page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
@@ -201,6 +201,68 @@ function suratSheet(v){const iv=v.invoice;let url='';
   b.appendChild(box);
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
-A.pdf={build:build,buildSurat:buildSurat,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
-A.shareSheet=shareSheet;A.suratSheet=suratSheet;
+// ---- Surat Jalan: label 1/2 A4 (bagian atas kertas A4) untuk ditempel di paket. TANPA harga. Selalu ke alamat pelanggan. ----
+async function buildJalan(v,s){
+ const P=window.PDFLib;if(!P)throw new Error('Modul PDF belum termuat. Muat ulang halaman lalu coba lagi.');
+ s=s||{};const iv=v.invoice;
+ const doc=await P.PDFDocument.create();doc.setTitle('Surat Jalan '+clean(iv.invoice_number));doc.setProducer('AeneFlow');doc.setCreator('AeneFlow');
+ const F=await doc.embedFont(P.StandardFonts.Helvetica),B=await doc.embedFont(P.StandardFonts.HelveticaBold);
+ const W=595.28,H=841.89,HL=H/2,M=34,R=W-M;
+ const rose=P.rgb(.545,.286,.353),ink=P.rgb(.15,.13,.13),mute=P.rgb(.46,.42,.42),ln=P.rgb(.85,.76,.78),blush=P.rgb(.984,.957,.965);
+ const page=doc.addPage([W,H]);
+ const tx=(str,x,yy,size,font,color,right)=>{str=clean(str);if(!str)return;page.drawText(str,{x:right?x-font.widthOfTextAtSize(str,size):x,y:yy,size:size,font:font,color:color||ink});};
+ page.drawRectangle({x:0,y:H-8,width:W,height:8,color:rose});
+ // garis gunting di tengah kertas
+ for(let x=0;x<W;x+=12)page.drawLine({start:{x:x,y:HL},end:{x:Math.min(x+6,W),y:HL},thickness:.8,color:ln});
+ // kotak pesanan (kanan)
+ const items=v.items.map(i=>({name:i.name,qty:String(i.qty)+' '+(i.unit||'')}));
+ A.extrasOf(iv).forEach(l=>{if(l&&l.name)items.push({name:l.name,qty:String(l.qty)+' pcs'});});
+ const BW=200,BX=R-BW,top=H-34,floor=HL+92;
+ const two=nm=>nm.length>2?[nm[0],nm[1].replace(/.{0,3}$/,'')+'...']:nm;
+ const prow=[];let used=34,n=0;
+ for(const i of items){const nm=two(wrap(F,10,i.name,BW-24-62)),hh=nm.length*12+4,left=items.length-n-1;
+  if(top-(used+hh+(left>0?16:0))<floor&&n>0)break;prow.push({nm:nm,qty:i.qty.trim()});used+=hh;n++;}
+ const more=items.length-prow.length,bh=used+(more>0?16:0)+2;
+ page.drawRectangle({x:BX,y:top-bh,width:BW,height:bh,color:blush,borderColor:ln,borderWidth:.8});
+ tx('PESANAN',BX+12,top-16,8,B,mute);let by=top-31;
+ prow.forEach(r=>{r.nm.forEach((l,k)=>{tx(l,BX+12,by,10,F,ink);if(k===0)tx(r.qty,BX+BW-12,by,10,B,ink,true);by-=12;});by-=4;});
+ if(more>0)tx('+ '+more+' item lain (lihat Surat Pesanan)',BX+12,by,8.5,F,mute);
+ // penerima (kiri)
+ const LW=BX-M-18;let y=top-4;
+ tx('KEPADA YTH.',M,y,9.5,B,mute);y-=28;
+ {let fs=26,nl=wrap(B,fs,iv.cust_name||'',LW);if(nl.length>2){fs=19;nl=wrap(B,fs,iv.cust_name||'',LW);}nl.slice(0,3).forEach(l=>{tx(l,M,y,fs,B,ink);y-=fs+4;});}
+ if(iv.cust_org){tx(iv.cust_org,M,y,12,B,ink);y-=18;}
+ y-=2;wrap(F,15,iv.cust_address||'',LW).slice(0,6).forEach(l=>{if(l){tx(l,M,y,15,F,ink);y-=19;}});
+ if(iv.cust_whatsapp){y-=6;tx('Telp/WA '+waShow(iv.cust_whatsapp),M,y,17,B,ink);}
+ // pengirim (bawah label)
+ const py=HL+18;page.drawLine({start:{x:M,y:py+62},end:{x:R,y:py+62},thickness:.8,color:ln});
+ let logo=null,lw=0,lh=0;const lm=/^data:image\/(png|jpeg);base64,([A-Za-z0-9+\/]+={0,2})$/.exec(s.business_logo||'');
+ if(lm){try{const bin=Uint8Array.from(atob(lm[2]),c=>c.charCodeAt(0));logo=lm[1]==='png'?await doc.embedPng(bin):await doc.embedJpg(bin);const sc=Math.min(48/logo.width,48/logo.height);lw=logo.width*sc;lh=logo.height*sc;}catch(e){logo=null;lw=lh=0;}}
+ if(logo)page.drawImage(logo,{x:M,y:py+(54-lh)/2-4,width:lw,height:lh});
+ const px=M+(logo?lw+14:0);
+ tx('PENGIRIM',px,py+42,8,B,mute);tx(s.business_name||'',px,py+25,15,B,rose);
+ const cl=[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):''].filter(Boolean).join('   |   ');
+ tx(cl,px,py+8,10.5,F,ink);
+ return doc.save();}
+function jalanName(v){return safeName(v).replace(/^Invoice-/,'SuratJalan-');}
+function jalanSheet(v){const iv=v.invoice;let url='';
+ if(iv.state==='Cancelled'){A.toast('Invoice dibatalkan tidak bisa dibuatkan surat jalan.');return;}
+ ui.sheet('Surat Jalan',(b,close)=>{
+  const status=h('div',{class:'sub',id:'sj-status',role:'status'},'Menyiapkan PDF…'),box=h('div');
+  b.appendChild(status);b.appendChild(box);
+  A.api('bootstrap').then(r=>(r&&r.settings?(S.boot.settings=r.settings):S.boot.settings)||{},()=>S.boot.settings||{}).then(s=>buildJalan(v,s)).then(bytes=>{
+   const name=jalanName(v),blob=new Blob([bytes],{type:'application/pdf'});url=URL.createObjectURL(blob);
+   let file=null;try{file=new File([blob],name,{type:'application/pdf'});}catch(e){}
+   status.textContent='PDF siap: '+name+' ('+Math.max(1,Math.round(bytes.length/1024))+' KB)';
+   const canShare=!!(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]}));
+   const row=h('div',{class:'btnrow wrapb'});
+   if(canShare)row.appendChild(h('button',{class:'btn pri',type:'button',id:'sj-share',onclick:async()=>{try{await navigator.share({files:[file],title:name});}catch(e){if(e&&e.name!=='AbortError')A.toast('Gagal membuka menu bagikan. Coba Unduh PDF.');}}},'Bagikan / Cetak'));
+   row.appendChild(h('a',{class:'btn'+(canShare?'':' pri'),id:'sj-dl',href:url,download:name},'Unduh PDF'));
+   box.appendChild(row);
+   box.appendChild(h('div',{class:'sub',style:'margin-top:8px'},'Cetak di kertas A4 dengan skala 100%. Surat jalan ada di setengah bagian atas; gunting di garis tengah lalu tempel di paket.'));
+  }).catch(e=>{status.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},'Gagal membuat PDF: '+(e&&e.message||e)));});
+ },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
+
+A.pdf={build:build,buildJalan:buildJalan,buildSurat:buildSurat,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
+A.shareSheet=shareSheet;A.suratSheet=suratSheet;A.jalanSheet=jalanSheet;
 });
