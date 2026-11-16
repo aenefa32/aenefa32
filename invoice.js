@@ -1,4 +1,4 @@
-/* AeneFlow - invoice.js: editor invoice, detail invoice, pembayaran (DP/cicilan/pelunasan), batal, duplikat. Semua teks lewat textContent. */
+/* AeneFlow - invoice.js: editor invoice, detail invoice, pembayaran (DP/cicilan/pelunasan), batal. Semua teks lewat textContent. */
 (window.AeneModules=window.AeneModules||[]).push(function(A){'use strict';
 const h=A.h,ui=A.ui,rp=A.rp,fdate=A.fdate,S=A.S,api=A.api,calc=window.AeneCalc.calcTotals;
 const METHODS=['Bank Transfer','Cash','QRIS','E-wallet'];
@@ -28,9 +28,15 @@ async function vEdit(el,my){
  const cbox=h('div',{class:'card'});wrap.appendChild(cbox);
  function drawCust(){cbox.textContent='';cbox.appendChild(h('div',{class:'sub'},'Pelanggan'));
   const sel=ui.select([['','— Pilih pelanggan —']].concat(activeC.map(c=>[c.customer_id,c.name+(c.organization?' · '+c.organization:'')])).concat(st.manual&&!st.customer_id?[['__manual',st.manual.cust_name+' (tanpa data pelanggan)']]:[]),st.customer_id||(st.manual?'__manual':''),{'aria-label':'Pelanggan',id:'f-cust'});
-  sel.addEventListener('change',()=>{if(sel.value==='__manual'){st.customer_id='';}else{st.customer_id=sel.value;st.manual=null;}});
+  sel.addEventListener('change',()=>{if(sel.value==='__manual'){st.customer_id='';}else{st.customer_id=sel.value;st.manual=null;st.refreshCust=false;}drawCust();});// gambar ulang supaya kartu info ikut berganti
+  const cur1=st.customer_id?activeC.find(c=>c.customer_id===st.customer_id):null;
   cbox.appendChild(h('div',{class:'row'},sel,h('button',{class:'btn',type:'button',onclick:quickAdd},'+ Baru')));
+  // info pelanggan terpilih + tombol Ubah (memperbarui data pelanggan; invoice ini ikut memakai data barunya saat disimpan)
+  if(cur1){cbox.appendChild(h('div',{class:'cinfo',id:'f-cinfo'},h('div',{class:'cname'},cur1.name+(cur1.organization?' · '+cur1.organization:'')),h('div',{class:'sub',id:'f-cwa'},cur1.whatsapp?'WhatsApp '+cur1.whatsapp:'WhatsApp belum diisi'),h('div',{class:'sub',id:'f-caddr'},cur1.address?cur1.address:'Alamat belum diisi')));
+   cbox.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',id:'f-cust-edit',onclick:()=>editCust(cur1)},'Ubah data pelanggan')));
+   if(st.refreshCust)cbox.appendChild(h('p',{class:'sub',id:'f-crefresh'},'Data pelanggan diperbarui. Tekan Simpan agar invoice ini memakai data terbaru.'));}
   if(edit&&iv.customer_id&&st.customer_id&&st.customer_id!==iv.customer_id)cbox.appendChild(h('p',{class:'sub'},'Pelanggan pada invoice akan diganti.'));}
+ function editCust(c){ui.sheet('Ubah pelanggan',(b,close)=>A.custForm(b,c,async u=>{const i=activeC.findIndex(x=>x.customer_id===u.customer_id);if(i>=0)activeC[i]=u;st.refreshCust=true;close();drawCust();A.toast('Data pelanggan disimpan');}));}
  function quickAdd(){ui.sheet('Pelanggan baru',(b,close)=>A.custForm(b,null,async c=>{activeC.push(c);st.customer_id=c.customer_id;st.manual=null;close();drawCust();A.toast('Pelanggan ditambahkan');}));}
  drawCust();
  // --- item
@@ -79,7 +85,7 @@ async function vEdit(el,my){
  // --- simpan
  function payload(){const p={items:st.items.map(i=>({item_id:i.item_id,product_id:i.product_id,name:i.name.trim(),description:i.description,unit:i.unit||'pcs',qty:i.qty,unit_price:i.unit_price,cost_price:i.cost_price})),
    issue_date:st.issue,due_date:st.due,discount_type:st.dt,discount_value:st.dv,tax_rate:st.tax,shipping_fee:st.ship,extra_fee_label:st.xl,extra_fee:st.xf,notes:st.notes,terms:st.terms,deadline_date:st.deadline};
-  if(st.customer_id)p.customer_id=st.customer_id;else if(st.manual)Object.assign(p,st.manual);return p;}
+  if(st.customer_id){p.customer_id=st.customer_id;if(st.refreshCust)p.refresh_customer=true;}else if(st.manual)Object.assign(p,st.manual);return p;}
  function check(){if(!st.customer_id&&!st.manual)return'Pilih pelanggan terlebih dahulu.';if(!st.issue||!st.due)return'Tanggal terbit dan jatuh tempo wajib diisi.';if(st.due<st.issue)return'Jatuh tempo tidak boleh sebelum tanggal terbit.';
   for(let i=0;i<st.items.length;i++){const it=st.items[i];if(!it.name.trim())return'Nama item '+(i+1)+' wajib diisi.';if(!(it.qty>0))return'Qty item '+(i+1)+' harus lebih dari 0.';}
   if(edit&&st.t.grand_total<st.paid)return'Total baru ('+rp(st.t.grand_total)+') lebih kecil dari pembayaran yang sudah tercatat ('+rp(st.paid)+').';return'';}
@@ -111,14 +117,14 @@ function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='o
  if(iv.state==='Issued'&&v.balance>0)add('Catat Pembayaran','pri',()=>payForm(v,reload),'b-pay');
  if(iv.state==='Draft')add('Terbitkan','pri',e=>act(e.currentTarget,()=>api('invoices.issue',{invoice_id:iv.invoice_id,ver:v.ver})),'b-issue');
  if(iv.state!=='Cancelled')add('Ubah','',()=>{location.hash='#/invoice-edit?id='+encodeURIComponent(iv.invoice_id);},'b-edit');
- add('Duplikat','',()=>{location.hash='#/invoice-edit?dup='+encodeURIComponent(iv.invoice_id);},'b-dup');
  if(iv.state==='Issued')add('Batalkan Invoice','danger',async e=>{const btn=e.currentTarget;
   if(v.paid>0){ui.banner(errBox,'Invoice masih punya pembayaran valid ('+rp(v.paid)+'). Batalkan (void) pembayarannya dulu, baru invoice bisa dibatalkan.');return;}
   const r=await ui.confirm({title:'Batalkan invoice?',message:iv.invoice_number+' akan ditandai Cancelled. Data tidak dihapus.',reason:{label:'Alasan pembatalan (wajib)',required:true},danger:true,okText:'Batalkan Invoice',cancelText:'Kembali'});if(!r)return;
   act(btn,()=>api('invoices.cancel',{invoice_id:iv.invoice_id,ver:v.ver,reason:r.reason}));},'b-cancel');
- if(iv.state==='Draft')add('Hapus Draft','danger',async()=>{const r=await ui.confirm({title:'Hapus draf?',message:'Draf '+iv.invoice_number+' akan dihapus. Nomor invoice ini tidak dipakai ulang.',danger:true,okText:'Hapus Draft',cancelText:'Kembali'});if(!r)return;
-  try{await api('invoices.delete_draft',{invoice_id:iv.invoice_id,ver:v.ver});A.toast('Draf dihapus');location.hash='#/home';}catch(e){ui.banner(errBox,e.message);}},'b-del');
- el.appendChild(bar);
+ if(v.paid===0)add('Hapus Invoice','danger',async()=>{const msg=iv.state==='Draft'?'Draf '+iv.invoice_number+' akan dihapus. Nomor invoice ini tidak dipakai ulang.':(iv.state==='Cancelled'?'Invoice '+iv.invoice_number+' (dibatalkan) akan dihapus dari daftar. Nomor invoice ini tidak dipakai ulang.':'Invoice '+iv.invoice_number+' sudah terbit. Jika sudah dikirim ke pelanggan, sebaiknya pilih Batalkan Invoice, bukan Hapus. Nomor invoice ini tidak dipakai ulang.');
+  const r=await ui.confirm({title:'Hapus invoice?',message:msg,danger:true,okText:'Hapus Invoice',cancelText:'Kembali'});if(!r)return;
+  try{await api('invoices.delete',{invoice_id:iv.invoice_id,ver:v.ver});A.toast('Invoice dihapus');location.hash='#/home';}catch(e){ui.banner(errBox,e.message);}},'b-del');
+ el.appendChild(bar);if(v.paid>0)el.appendChild(h('p',{class:'sub',id:'b-del-hint'},'Hapus invoice tersedia setelah semua pembayarannya dibatalkan (void).'));
  if(iv.state!=='Cancelled')el.appendChild(h('button',{class:'btn',type:'button',id:'b-pdf',style:'margin:0 0 12px',onclick:()=>A.shareSheet(v)},'PDF & WhatsApp'));
  // item
  el.appendChild(h('h2',{class:'sec'},'Item'));

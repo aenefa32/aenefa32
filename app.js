@@ -75,7 +75,7 @@ const skel=el=>{for(let i=0;i<4;i++)el.appendChild(h('div',{class:'skel'}));};
 
 // ---------- halaman ----------
 const PILL={Paid:['p-paid','Paid'],'Partially Paid':['p-part','Partially Paid'],Unpaid:['p-unpaid','Unpaid'],Overdue:['p-over','Overdue'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Cancelled']};
-const TABS=[['Invoices'],['New Orders',1],['Unpaid'],['Paid'],['In Production',1],['Ready to Ship',1],['Shipped',1],['Completed',1]];
+const TABS=[['Invoices'],['Unpaid'],['Paid'],['Cancelled'],['New Orders',1],['In Production',1],['Ready to Ship',1],['Shipped',1],['Completed',1]];
 const OPEN=['Unpaid','Partially Paid','Overdue'];
 async function vHome(el,my){
  el.appendChild(h('div',{class:'chips',role:'group','aria-label':'Filter'},...TABS.map(t=>h('button',{class:'chip',type:'button','aria-pressed':String(S.tab===t[0]),disabled:!!t[1],title:t[1]?'Menunggu modul Order Fulfillment':'',onclick:()=>{S.tab=t[0];render();}},t[0]))));
@@ -83,12 +83,12 @@ async function vHome(el,my){
  const sum=h('div'),list=h('div');el.appendChild(sum);el.appendChild(list);skel(list);
  if(!S.cache.inv)S.cache.inv=await api('invoices.list');if(my!==S.seq)return;const all=S.cache.inv;
  const open=all.filter(x=>OPEN.indexOf(x.payment_status)>=0);
- sum.appendChild(h('div',{class:'kpis'},...[['Piutang',rp(open.reduce((n,x)=>n+x.balance,0))],['Diterima',rp(all.filter(x=>x.state==='Issued').reduce((n,x)=>n+x.paid,0))],['Invoice',all.length]].map(k=>h('div',{class:'kpi'},h('span',{class:'sub'},k[0]),h('b',null,k[1])))));
- if(S.tab!=='Invoices')el.appendChild(h('p',{class:'sub'},'Tab yang redup menunggu modul Order Fulfillment.'));
+ sum.appendChild(h('div',{class:'kpis'},...[['Piutang',rp(open.reduce((n,x)=>n+x.balance,0))],['Diterima',rp(all.filter(x=>x.state==='Issued').reduce((n,x)=>n+x.paid,0))],['Invoice',all.filter(x=>x.state!=='Cancelled').length]].map(k=>h('div',{class:'kpi'},h('span',{class:'sub'},k[0]),h('b',null,k[1])))));
+ if(TABS.some(t=>t[0]===S.tab&&t[1]))el.appendChild(h('p',{class:'sub'},'Tab yang redup menunggu modul Order Fulfillment.'));
  function paint(){list.textContent='';const q=S.q.trim().toLowerCase();let rows=all.slice().sort((a,b)=>String(b.issue_date).localeCompare(String(a.issue_date))||String(b.invoice_number).localeCompare(String(a.invoice_number)));
-  if(S.tab==='Unpaid')rows=rows.filter(x=>OPEN.indexOf(x.payment_status)>=0);else if(S.tab==='Paid')rows=rows.filter(x=>x.payment_status==='Paid');
+  if(S.tab==='Unpaid')rows=rows.filter(x=>OPEN.indexOf(x.payment_status)>=0);else if(S.tab==='Paid')rows=rows.filter(x=>x.payment_status==='Paid');else if(S.tab==='Cancelled')rows=rows.filter(x=>x.state==='Cancelled');else rows=rows.filter(x=>x.state!=='Cancelled');
   if(q)rows=rows.filter(x=>String(x.invoice_number).toLowerCase().indexOf(q)>=0||String(x.cust_name).toLowerCase().indexOf(q)>=0);
-  if(!rows.length){list.appendChild(empty(all.length?'Tidak ada invoice':'Belum ada invoice',all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
+  if(!rows.length){list.appendChild(empty(S.tab==='Cancelled'&&!q?'Belum ada invoice dibatalkan':(all.length?'Tidak ada invoice':'Belum ada invoice'),S.tab==='Cancelled'&&!q?'Invoice yang dibatalkan akan tampil di tab ini.':all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
   rows.slice(0,300).forEach(x=>{const p=PILL[x.payment_status]||['p-draft',x.payment_status];list.appendChild(h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pill '+p[0]},p[1]),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null)));});
   if(rows.length>300)list.appendChild(h('p',{class:'sub'},'Menampilkan 300 pertama dari '+rows.length+'. Gunakan pencarian untuk mempersempit.'));}
  paint();

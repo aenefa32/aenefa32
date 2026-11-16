@@ -32,11 +32,13 @@ async function vCustDetail(el,my){const id=A.param('id');A.skel(el);
  const open=mine.filter(i=>i.state==='Issued').reduce((n,i)=>n+i.balance,0);
  el.appendChild(h('div',{class:'hero'},h('div',{class:'big',id:'cd-name'},c.name),h('div',{class:'sub'},[c.organization,c.whatsapp,c.email].filter(Boolean).join(' · ')),c.address?h('div',{class:'sub'},c.address+(c.city?', '+c.city:'')):null,act(c)?null:h('span',{class:'pill p-cancel'},'Nonaktif')));
  el.appendChild(h('div',{class:'kpis two'},h('div',{class:'kpi'},h('span',{class:'sub'},'Invoice'),h('b',null,mine.length)),h('div',{class:'kpi'},h('span',{class:'sub'},'Piutang'),h('b',null,rp(open)))));
- const bar=h('div',{class:'btnrow wrapb'});
+ const eb=h('div',{id:'cd-err'}),bar=h('div',{class:'btnrow wrapb'});el.appendChild(eb);
  bar.appendChild(h('a',{class:'btn pri',href:'#/invoice-edit?cust='+encodeURIComponent(id),id:'cd-inv'},'Buat invoice'));
  bar.appendChild(h('button',{class:'btn',type:'button',id:'cd-edit',onclick:()=>ui.sheet('Ubah pelanggan',(b,close)=>A.custForm(b,c,async()=>{close();A.toast('Perubahan disimpan');A.render();}))},'Ubah'));
- bar.appendChild(h('button',{class:'btn',type:'button',id:'cd-toggle',onclick:async e=>{const btn=e.currentTarget;if(act(c)){const r=await ui.confirm({title:'Nonaktifkan pelanggan?',message:'Pelanggan tidak muncul di pilihan invoice baru. Invoice lama tetap utuh.',okText:'Nonaktifkan'});if(!r)return;}
-  ui.run(btn,async()=>{await api('customers.set_active',{customer_id:id,active:!act(c)});A.render();});}},act(c)?'Nonaktifkan':'Aktifkan kembali'));
+ if(!act(c))bar.appendChild(h('button',{class:'btn',type:'button',id:'cd-toggle',onclick:e=>ui.run(e.currentTarget,async()=>{await api('customers.set_active',{customer_id:id,active:true});A.render();})},'Aktifkan kembali'));
+ bar.appendChild(h('button',{class:'btn danger',type:'button',id:'cd-del',onclick:async e=>{const btn=e.currentTarget,n=mine.length;
+  const r=await ui.confirm({title:'Hapus pelanggan?',message:c.name+' akan dihapus PERMANEN dari daftar pelanggan. '+(n?n+' invoice miliknya tetap ada dan isinya tidak berubah (nama, WhatsApp, dan alamat di invoice tetap), hanya tidak lagi tertaut ke daftar pelanggan. ':'Pelanggan ini belum punya invoice. ')+'Penghapusan tidak bisa dibatalkan dari aplikasi.',danger:true,okText:'Hapus Pelanggan',cancelText:'Kembali'});if(!r)return;
+  ui.run(btn,async()=>{await api('customers.delete',{customer_id:id});A.toast('Pelanggan dihapus');location.hash='#/customers';},m=>ui.banner(eb,m));}},'Hapus pelanggan'));
  el.appendChild(bar);if(c.notes)el.appendChild(h('div',{class:'card'},h('div',{class:'sub'},'Catatan'),h('div',{class:'pre'},c.notes)));
  el.appendChild(h('h2',{class:'sec'},'Riwayat invoice'));
  if(!mine.length)el.appendChild(h('p',{class:'sub'},'Belum ada invoice untuk pelanggan ini.'));
