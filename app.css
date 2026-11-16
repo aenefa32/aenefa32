@@ -79,3 +79,4 @@ a.item.lnk{text-decoration:none;cursor:pointer}a.item.lnk:hover{border-color:var
 .logo-prev{max-width:128px;max-height:128px;border-radius:12px;border:1px solid var(--line);background:#fff;display:block;margin-bottom:10px}
 .filebtn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .filein{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0}
+.cinfo{margin:10px 0 2px;padding:10px 12px;border-radius:12px;background:var(--blush);border:1px solid var(--line)}.cinfo .cname{font-weight:600}.cinfo .sub{overflow-wrap:anywhere}
