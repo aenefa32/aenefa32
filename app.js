@@ -34,7 +34,7 @@ async function api(action,params){
  try{res=await fetch(C.apiUrl,{method:'POST',body:JSON.stringify({idToken:S.token,action:action,params:params||{},request_id:NOREQ.test(action)?undefined:uuid()})});}
  catch(e){throw new Error('Tidak bisa menghubungi server. Periksa koneksi internet.');}
  try{j=await res.json();}catch(e){throw new Error('Respons server tidak valid.');}
- if(!j.ok){if(/Token|Belum login|Akun tidak diizinkan/.test(j.error||'')){logout(/Akun tidak/.test(j.error)?'Akun ini tidak diizinkan memakai AeneFlow.':'Sesi tidak valid. Silakan masuk lagi.');}throw new Error(j.error||'Terjadi kesalahan');}
+ if(!j.ok){if(/^Aksi tidak dikenal/.test(j.error||''))throw new Error('Backend belum diperbarui ke versi R1. Tempel kode Apps Script terbaru lalu buat versi deployment baru.');if(/Token|Belum login|Akun tidak diizinkan/.test(j.error||'')){logout(/Akun tidak/.test(j.error)?'Akun ini tidak diizinkan memakai AeneFlow.':'Sesi tidak valid. Silakan masuk lagi.');}throw new Error(j.error||'Terjadi kesalahan');}
  return j.data;}
 function logout(msg){S.token='';S.exp=0;S.boot=null;S.cache={};try{google.accounts.id.disableAutoSelect();}catch(e){}$('app').hidden=true;showLogin(msg||'');}
 function waitGoogle(){return new Promise((res,rej)=>{let n=0;const t=setInterval(()=>{if(window.google&&google.accounts&&google.accounts.id){clearInterval(t);res();}else if(++n>100){clearInterval(t);rej(new Error('Google Sign-In tidak bisa dimuat. Periksa koneksi internet lalu muat ulang.'));}},100);});}
@@ -61,7 +61,7 @@ const ROUTES={
 async function render(){if(!S.boot)return;const my=++S.seq,key=(location.hash.replace(/^#\/?/,'')||'home').split('?')[0],r=ROUTES[key]||ROUTES.home;
  markNav(r.nav);document.title=(r===ROUTES.home?'':r.t+' · ')+'AeneFlow';
  const top=$('top');top.textContent='';
- if(r.back)top.appendChild(h('button',{class:'ib',type:'button','aria-label':'Kembali',onclick:()=>{location.hash='#/'+r.back;}},'‹'));else top.appendChild(h('div',{class:'logo','aria-hidden':'true'},initials(S.boot.settings&&S.boot.settings.business_name)));
+ if(r.back)top.appendChild(h('button',{class:'ib',type:'button','aria-label':'Kembali',onclick:()=>{location.hash='#/'+(typeof r.back==='function'?r.back():r.back);}},'‹'));else top.appendChild(h('div',{class:'logo','aria-hidden':'true'},initials(S.boot.settings&&S.boot.settings.business_name)));
  top.appendChild(h('h1',null,r.t));
  if(r===ROUTES.home){top.appendChild(h('button',{class:'ib',type:'button','aria-label':'Cari invoice',onclick:()=>{S.showSearch=!S.showSearch;render();}},icon('search')));
   top.appendChild(h('button',{class:'ib',type:'button','aria-label':'Muat ulang',onclick:()=>{delete S.cache.inv;render();}},icon('refresh')));
@@ -70,6 +70,7 @@ async function render(){if(!S.boot)return;const my=++S.seq,key=(location.hash.re
  document.querySelectorAll('.fab').forEach(x=>x.remove());
  try{await r.v(box,my);}catch(e){if(my===S.seq){m.textContent='';m.appendChild(h('div',{class:'banner',role:'alert'},e.message));m.appendChild(h('button',{class:'btn',type:'button',onclick:()=>render()},'Coba lagi'));}}}
 window.addEventListener('hashchange',render);window.addEventListener('offline',()=>toast('Anda sedang offline. Data tidak bisa dimuat.'));
+function param(k){const q=(location.hash.split('?')[1]||'');const o=new URLSearchParams(q);return o.get(k)||'';}
 const skel=el=>{for(let i=0;i<4;i++)el.appendChild(h('div',{class:'skel'}));};
 
 // ---------- halaman ----------
@@ -88,10 +89,10 @@ async function vHome(el,my){
   if(S.tab==='Unpaid')rows=rows.filter(x=>OPEN.indexOf(x.payment_status)>=0);else if(S.tab==='Paid')rows=rows.filter(x=>x.payment_status==='Paid');
   if(q)rows=rows.filter(x=>String(x.invoice_number).toLowerCase().indexOf(q)>=0||String(x.cust_name).toLowerCase().indexOf(q)>=0);
   if(!rows.length){list.appendChild(empty(all.length?'Tidak ada invoice':'Belum ada invoice',all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
-  rows.slice(0,300).forEach(x=>{const p=PILL[x.payment_status]||['p-draft',x.payment_status];list.appendChild(h('div',{class:'item'},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pill '+p[0]},p[1]),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null)));});
+  rows.slice(0,300).forEach(x=>{const p=PILL[x.payment_status]||['p-draft',x.payment_status];list.appendChild(h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pill '+p[0]},p[1]),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null)));});
   if(rows.length>300)list.appendChild(h('p',{class:'sub'},'Menampilkan 300 pertama dari '+rows.length+'. Gunakan pencarian untuk mempersempit.'));}
  paint();
- const f=h('button',{class:'fab',type:'button','aria-label':'Buat invoice baru',onclick:()=>toast('Editor invoice belum dibangun.')},'+');document.body.appendChild(f);}
+ const f=h('button',{class:'fab',type:'button','aria-label':'Buat invoice baru',onclick:()=>{location.hash='#/invoice-edit';}},'+');document.body.appendChild(f);}
 async function vMore(el,my){const b=S.boot,s=b.settings||{};
  el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',{class:'mark','aria-hidden':'true',style:'width:56px;height:56px;font-size:22px'},initials(s.business_name)),h('div',{style:'flex:1;min-width:0'},h('div',{style:'font:700 22px var(--serif)'},s.business_name||'AeneFlow'),h('div',{class:'sub'},b.user.email+' · '+b.user.role)))));
  const k=h('div',{class:'kpis'});el.appendChild(k);
@@ -109,7 +110,9 @@ async function vSettings(el){const owner=S.boot.user.role==='owner';
  el.appendChild(h('p',{class:'sub'},'AeneFlow · shell v0.1. Pengaturan usaha, rekening, dan Google Calendar belum dibangun.'));}
 async function vImport(el){if(S.boot.user.role!=='owner')return el.appendChild(empty('Khusus pemilik','Hanya pemilik yang boleh mengimpor data.'));
  if(!window.AeneImport)return el.appendChild(h('div',{class:'banner',role:'alert'},'Modul impor tidak termuat.'));window.AeneImport.mount(el,{api:api});}
-window.AeneApp={api:api};
+window.AeneApp={api:api,logout:logout};
+const A={h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
+(window.AeneModules||[]).forEach(f=>{try{f(A);}catch(e){console.error('Modul gagal dimuat',e);}});
 
 // ---------- mulai ----------
 function showSetup(msg){$('splash').hidden=true;const l=$('login');l.hidden=false;l.textContent='';
