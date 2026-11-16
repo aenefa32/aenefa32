@@ -15,18 +15,18 @@ const PER=[['month','Bulan ini'],['3m','3 bulan'],['year','Tahun ini'],['all','S
 const kpi=(label,val,sub,cls,id)=>h('div',{class:'kpi',id:id||null},h('span',{class:'sub'},label),h('b',{class:cls||''},val),h('small',{class:'sub'},sub||''));
 const row=(a,b,cls)=>h('div',{class:'mini'},h('span',null,a),h('span',{class:cls||''},b));
 // ---------- form Catat ----------
-function addForm(r,done){ui.sheet('Catat',(b,close)=>{const err=h('div');b.appendChild(err);
- let kind='out',amt=0;const kinds=[['out','Pengeluaran'],['in','Pemasukan'],['transfer','Transfer']];
+function addForm(r,done,opt){opt=opt||{};ui.sheet(opt.title||'Catat',(b,close)=>{const err=h('div');b.appendChild(err);
+ let kind='out',amt=0;const kinds=opt.onlyOut?[['out','Pengeluaran']]:[['out','Pengeluaran'],['in','Pemasukan'],['transfer','Transfer']];
  const am=ui.money(0,n=>{amt=n;},{'aria-label':'Nominal',id:'cf-amt'}),dt=h('input',{type:'date',id:'cf-date',value:ui.today(),'aria-label':'Tanggal'}),
   acc=ui.select(ACCTS.map(a=>[a,a]),'BCA',{id:'cf-acc','aria-label':'Rekening'}),to=ui.select(ACCTS.map(a=>[a,a]),'Tunai',{id:'cf-to','aria-label':'Rekening tujuan'}),
   cat=h('select',{id:'cf-cat','aria-label':'Kategori'}),ds=ui.text({id:'cf-desc',maxlength:'200',placeholder:'mis. Mika 100 pcs','aria-label':'Keterangan'}),pt=ui.text({id:'cf-party',maxlength:'100',placeholder:'mis. Toko Kain Jaya (boleh kosong)','aria-label':'Pihak terkait'});
  const chips=h('div',{class:'chips',role:'group','aria-label':'Jenis',id:'cf-kinds'}),dyn=h('div');
- function drawCats(){cat.textContent='';(r.categories||[]).filter(c=>c.direction===kind).forEach(c=>cat.appendChild(h('option',{value:c.category_id},c.name)));}
+ function drawCats(){cat.textContent='';(r.categories||[]).filter(c=>c.direction===kind).sort((x,y)=>(x.prive?1:0)-(y.prive?1:0)).forEach(c=>cat.appendChild(h('option',{value:c.category_id},c.name)));}
  function draw(){chips.textContent='';kinds.forEach(k=>chips.appendChild(h('button',{class:'chip','data-k':k[0],type:'button','aria-pressed':String(kind===k[0]),onclick:()=>{kind=k[0];draw();}},k[1])));
   dyn.textContent='';drawCats();
   if(kind==='transfer'){dyn.appendChild(h('div',{class:'grid2'},ui.field('Dari rekening',acc),ui.field('Ke rekening',to)));dyn.appendChild(ui.field('Catatan (boleh kosong)',ds));}
   else{dyn.appendChild(ui.field(kind==='in'?'Masuk ke rekening':'Dibayar dari rekening',acc));dyn.appendChild(ui.field('Kategori',cat));dyn.appendChild(ui.field('Keterangan',ds));dyn.appendChild(ui.field('Pihak terkait',pt));}}
- b.appendChild(chips);b.appendChild(ui.field('Nominal (Rp)',am));b.appendChild(ui.field('Tanggal',dt));b.appendChild(dyn);draw();
+ if(!opt.onlyOut)b.appendChild(chips);b.appendChild(ui.field('Nominal (Rp)',am));b.appendChild(ui.field('Tanggal',dt));b.appendChild(dyn);draw();
  const go=h('button',{class:'btn pri',type:'button',id:'cf-save'},'Simpan');
  go.addEventListener('click',()=>{if(!(amt>0)){ui.banner(err,'Nominal harus lebih dari 0.');return;}
   if(kind!=='transfer'&&!cat.value){ui.banner(err,'Pilih kategori. Tambahkan di Pengaturan Cashflow bila belum ada.');return;}
@@ -34,6 +34,11 @@ function addForm(r,done){ui.sheet('Catat',(b,close)=>{const err=h('div');b.appen
   if(kind==='transfer'&&acc.value===to.value){ui.banner(err,'Rekening asal dan tujuan tidak boleh sama.');return;}
   ui.run(go,async()=>{await api('cash.add',{kind:kind,amount:amt,date:dt.value,account:acc.value,to_account:to.value,category_id:kind==='transfer'?'':cat.value,description:ds.value.trim(),party:kind==='transfer'?'':pt.value.trim()});close();A.toast('Tercatat');done();},m=>ui.banner(err,m));});
  b.appendChild(go);});}
+function txLine(t){const pos=t.kind==='pay'||t.kind==='in',tr=t.kind==='transfer';
+  const sub=dLabel(t.date)+' · '+(tr?t.account+' → '+t.to_account:t.account)+' · '+t.sub;
+  const amtEl=h('span',{class:tr?'':(t.prive?'cf-prv':(pos?'cf-in':'cf-out'))},(tr?'':(pos?'+ ':'- '))+rp(t.amount));
+  return h('div',{class:'tx'+(t.prive?' prv':''),'data-kind':t.kind},h('div',{class:'txm'},h('b',null,t.title),h('small',{class:'sub'},sub)),h('div',{class:'txa'},amtEl,t.can_void?h('button',{class:'linkbtn',type:'button','aria-label':'Batalkan '+t.title,onclick:async()=>{const c=await ui.confirm({title:'Batalkan catatan?',message:t.title+' · '+rp(t.amount)+'. Catatan tidak dihapus, hanya ditandai batal dan saldo dikembalikan.',reason:{label:'Alasan pembatalan',required:true},okText:'Batalkan catatan',danger:true});if(!c)return;
+    try{await api('cash.void',{txn_id:t.id,reason:c.reason});A.toast('Dibatalkan');A.render();}catch(e){A.toast(e.message);}}},'Batalkan'):null));}
 // ---------- halaman Cashflow ----------
 async function vCash(el,my){
  let cur=S.cfPeriod||'month';const box=h('div');
@@ -41,8 +46,10 @@ async function vCash(el,my){
  el.appendChild(box);ui.skel?ui.skel(box):box.appendChild(h('div',{class:'skel'}));
  let r;try{r=await api('cash.summary',period(cur));}catch(e){if(my!==S.seq)return;box.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},e.message));return;}
  if(my!==S.seq)return;box.textContent='';const k=r.kpi;
- box.appendChild(h('div',{class:'kpis rp-kpis',id:'cf-kpis'},kpi('Pemasukan',rp(k.masuk),k.masuk_invoice?'invoice '+rp(k.masuk_invoice)+(k.masuk_lain?' + lain '+rp(k.masuk_lain):''):(k.masuk_lain?'lain-lain':'belum ada'),'cf-in','cf-k-in'),kpi('Pengeluaran',rp(k.keluar),k.n_out+' catatan','cf-out','cf-k-out'),
-  h('div',{class:'kpi',style:'grid-column:span 2',id:'cf-k-net'},h('span',{class:'sub'},'Arus kas bersih'),h('b',{class:k.net<0?'cf-out':'',style:'font-size:22px'},(k.net<0?'- ':'')+rp(Math.abs(k.net))))));
+ const neg=n=>(n<0?'- ':'')+rp(Math.abs(n));
+ box.appendChild(h('div',{class:'kpis rp-kpis',id:'cf-kpis'},kpi('Pemasukan',rp(k.masuk),k.masuk_invoice?'invoice '+rp(k.masuk_invoice)+(k.masuk_lain?' + lain '+rp(k.masuk_lain):''):(k.masuk_lain?'lain-lain':'belum ada'),'cf-in','cf-k-in'),kpi('Biaya usaha',rp(k.keluar),k.n_out+' catatan','cf-out','cf-k-out'),
+  h('div',{class:'kpi',style:'grid-column:span 2',id:'cf-k-net'},h('span',{class:'sub'},k.prive?'Laba bersih (sebelum prive)':'Laba bersih'),h('b',{class:k.net<0?'cf-out':'',style:'font-size:22px'},neg(k.net))),
+  k.prive?h('div',{class:'kpi prv',style:'grid-column:span 2',id:'cf-k-prive'},h('span',{class:'sub'},'Prive ke tabungan owner'),h('b',{class:'cf-prv'},rp(k.prive)),h('small',{class:'sub'},k.n_prive+' setoran · sisa laba setelah prive '+neg(k.sisa))):null));
  box.appendChild(h('h2',{class:'sec'},'Saldo rekening'));
  box.appendChild(h('div',{class:'acc',id:'cf-acc-list'},...r.accounts.map(a=>h('div',{class:'card','data-acc':a.name},h('small',{class:'sub'},a.name),h('b',{class:a.balance<0?'cf-out':''},(a.balance<0?'- ':'')+rp(Math.abs(a.balance)))))));
  const set=!r.accounts.some(a=>a.opening);
@@ -50,23 +57,40 @@ async function vCash(el,my){
  box.appendChild(h('h2',{class:'sec'},'Laba-rugi bulanan'));
  const mx=Math.max(1,...r.months.map(m=>Math.max(m.masuk,m.keluar)));
  box.appendChild(h('div',{class:'card',id:'cf-pnl'},h('div',{class:'rp-bars cf-bars',id:'cf-bars'},...r.months.map(m=>h('div',null,h('div',{class:'pair'},h('i',{class:'bin',style:'height:'+Math.max(3,Math.round(m.masuk/mx*100))+'px','aria-label':monLabel(m.month)+' pemasukan '+rp(m.masuk)}),h('i',{class:'bout',style:'height:'+Math.max(3,Math.round(m.keluar/mx*100))+'px','aria-label':monLabel(m.month)+' pengeluaran '+rp(m.keluar)})),h('span',{class:'sub'},monLabel(m.month))))),
-  h('p',{class:'sub'},'Batang kiri pemasukan, kanan pengeluaran (6 bulan terakhir).'),
-  row('Pemasukan periode ini',rp(k.masuk)),row('Pengeluaran periode ini',rp(k.keluar)),row('Laba bersih',(k.net<0?'- ':'')+rp(Math.abs(k.net)),k.net<0?'cf-out':'cf-in')));
- if(r.by_category.length){box.appendChild(h('h2',{class:'sec'},'Pengeluaran per kategori'));const mc=Math.max(1,...r.by_category.map(c=>c.amount));
+  h('p',{class:'sub'},'Batang kiri pemasukan, kanan biaya usaha (6 bulan terakhir).'),
+  row('Pemasukan periode ini',rp(k.masuk)),row('Biaya usaha periode ini',rp(k.keluar)),row('Laba bersih',neg(k.net),k.net<0?'cf-out':'cf-in'),...(k.prive?[row('Prive (tabungan owner)',rp(k.prive),'cf-prv'),row('Sisa setelah prive',neg(k.sisa))]:[])));
+ if(r.by_category.length){box.appendChild(h('h2',{class:'sec'},'Biaya usaha per kategori'));const mc=Math.max(1,...r.by_category.map(c=>c.amount));
   box.appendChild(h('div',{class:'card',id:'cf-bycat'},...r.by_category.map(c=>h('div',{style:'margin-bottom:8px'},row(c.name,rp(c.amount)),h('div',{class:'bar2'},h('i',{style:'width:'+Math.round(c.amount/mc*100)+'%'}))))));}
  box.appendChild(h('h2',{class:'sec'},'Transaksi'));
  const list=h('div',{class:'card',id:'cf-list'});
  if(!r.recent.length)list.appendChild(h('p',{class:'sub',id:'cf-empty'},'Belum ada transaksi pada periode ini. Ketuk + untuk mencatat pengeluaran, pemasukan, atau transfer.'));
- r.recent.forEach(t=>{const pos=t.kind==='pay'||t.kind==='in',tr=t.kind==='transfer';
-  const sub=dLabel(t.date)+' · '+(tr?t.account+' → '+t.to_account:t.account)+' · '+t.sub;
-  const amtEl=h('span',{class:tr?'':(pos?'cf-in':'cf-out')},(tr?'':(pos?'+ ':'- '))+rp(t.amount));
-  const line=h('div',{class:'tx','data-kind':t.kind},h('div',{class:'txm'},h('b',null,t.title),h('small',{class:'sub'},sub)),h('div',{class:'txa'},amtEl,t.can_void?h('button',{class:'linkbtn',type:'button','aria-label':'Batalkan '+t.title,onclick:async()=>{const c=await ui.confirm({title:'Batalkan catatan?',message:t.title+' · '+rp(t.amount)+'. Catatan tidak dihapus, hanya ditandai batal dan saldo dikembalikan.',reason:{label:'Alasan pembatalan',required:true},okText:'Batalkan catatan',danger:true});if(!c)return;
-    try{await api('cash.void',{txn_id:t.id,reason:c.reason});A.toast('Dibatalkan');A.render();}catch(e){A.toast(e.message);}}},'Batalkan'):null));
-  list.appendChild(line);});
+ r.recent.forEach(t=>list.appendChild(txLine(t)));
  if(r.total_recent>r.recent.length)list.appendChild(h('p',{class:'sub'},'Menampilkan '+r.recent.length+' dari '+r.total_recent+' transaksi terbaru. Persempit periode untuk melihat yang lain.'));
  box.appendChild(list);
  box.appendChild(h('div',{class:'card menu',style:'margin-top:14px'},h('a',{href:'#/cashset',id:'cf-setlink'},'Pengaturan Cashflow (saldo awal & kategori)',h('span',null,'›'))));
  const fab=h('button',{class:'fab',type:'button',id:'cf-fab','aria-label':'Catat pemasukan, pengeluaran, atau transfer',onclick:()=>addForm(r,()=>A.render())},'+');box.appendChild(fab);}
+// ---------- menu Pengeluaran (More) ----------
+async function vExp(el,my){
+ let cur=S.exPeriod||'month',cf=S.exCat||'';const box=h('div');
+ const addBtn=h('button',{class:'btn pri',type:'button',id:'ex-add',style:'width:100%;margin:0 0 8px'},'+ Tambah pengeluaran');el.appendChild(addBtn);
+ el.appendChild(h('div',{class:'chips',role:'group','aria-label':'Periode'},...PER.map(p=>h('button',{class:'chip',type:'button','data-per':p[0],'aria-pressed':String(cur===p[0]),onclick:()=>{S.exPeriod=p[0];S.exCat='';A.render();}},p[1]))));
+ el.appendChild(box);ui.skel?ui.skel(box):box.appendChild(h('div',{class:'skel'}));
+ let r;try{r=await api('cash.summary',Object.assign({only:'out'},period(cur)));}catch(e){if(my!==S.seq)return;box.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},e.message));return;}
+ if(my!==S.seq)return;box.textContent='';const k=r.kpi;
+ addBtn.addEventListener('click',()=>addForm(r,()=>A.render(),{onlyOut:true,title:'Tambah pengeluaran'}));
+ box.appendChild(h('div',{class:'kpis rp-kpis',id:'ex-kpis'},kpi('Biaya usaha',rp(k.keluar),k.n_out+' catatan'+(k.n_out?' · rata-rata '+rp(Math.round(k.keluar/k.n_out)):''),'cf-out','ex-k-out'),kpi('Prive (tabungan owner)',rp(k.prive),k.n_prive+' setoran','cf-prv','ex-k-prive')));
+ if(r.by_category.length){box.appendChild(h('h2',{class:'sec'},'Biaya usaha per kategori'));const mc=Math.max(1,...r.by_category.map(c=>c.amount));
+  box.appendChild(h('div',{class:'card',id:'ex-bycat'},...r.by_category.map(c=>h('div',{style:'margin-bottom:8px'},row(c.name+' '+(k.keluar?Math.round(c.amount/k.keluar*100)+'%':''),rp(c.amount)),h('div',{class:'bar2'},h('i',{style:'width:'+Math.round(c.amount/mc*100)+'%'}))))));}
+ box.appendChild(h('h2',{class:'sec'},'Daftar'));
+ const names=[];r.recent.forEach(t=>{const n=t.category||'Lainnya';if(names.indexOf(n)<0)names.push(n);});
+ if(cf&&names.indexOf(cf)<0)cf='';
+ if(names.length>1)box.appendChild(h('div',{class:'chips',id:'ex-filter',role:'group','aria-label':'Kategori'},...[['','Semua']].concat(names.map(n=>[n,n])).map(c=>h('button',{class:'chip',type:'button','data-cat':c[0],'aria-pressed':String(cf===c[0]),onclick:()=>{S.exCat=c[0];A.render();}},c[1]))));
+ const list=h('div',{class:'card',id:'ex-list'}),rows=r.recent.filter(t=>!cf||(t.category||'Lainnya')===cf);
+ if(!rows.length)list.appendChild(h('p',{class:'sub',id:'ex-empty'},'Belum ada pengeluaran pada periode ini. Ketuk "+ Tambah pengeluaran" untuk mencatat.'));
+ rows.forEach(t=>list.appendChild(txLine(t)));
+ if(r.total_recent>r.recent.length)list.appendChild(h('p',{class:'sub'},'Menampilkan '+r.recent.length+' dari '+r.total_recent+' catatan terbaru. Persempit periode untuk melihat yang lain.'));
+ box.appendChild(list);
+ box.appendChild(h('p',{class:'sub'},'Prive (setoran ke tabungan owner) mengurangi saldo rekening tetapi tidak dihitung sebagai biaya usaha, jadi laba bersih tetap menunjukkan hasil usaha.'));}
 // ---------- Pengaturan Cashflow ----------
 async function vCashSet(el,my){
  const box=h('div');el.appendChild(box);ui.skel?ui.skel(box):box.appendChild(h('div',{class:'skel'}));
@@ -87,5 +111,6 @@ async function vCashSet(el,my){
   c.appendChild(h('div',{class:'row',style:'gap:8px;margin-top:8px'},nm,add));cbox.appendChild(c);});}
  drawCats();}
 A.ROUTES.cashflow={t:'Cashflow',nav:'cashflow',v:vCash};
+A.ROUTES.expenses={t:'Pengeluaran',nav:'more',back:'more',v:vExp};
 A.ROUTES.cashset={t:'Pengaturan Cashflow',nav:'more',back:'cashflow',v:vCashSet};
 });

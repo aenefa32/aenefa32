@@ -155,7 +155,7 @@ async function vHome(el,my){
 async function vMore(el,my){const b=S.boot,s=b.settings||{};
  el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',{class:'mark','aria-hidden':'true',style:'width:56px;height:56px;font-size:22px'},initials(s.business_name)),h('div',{style:'flex:1;min-width:0'},h('div',{style:'font:700 22px var(--serif)'},s.business_name||'AeneFlow'),h('div',{class:'sub'},b.user.email+' · '+b.user.role)))));
  const k=h('div',{class:'kpis'});el.appendChild(k);
- el.appendChild(h('div',{class:'card menu'},h('a',{href:'#/customers'},'Customers',h('span',null,'›')),h('a',{href:'#/products'},'Products & Catalog',h('span',null,'›')),h('a',{href:'#/reports'},'Reports',h('span',null,'›')),h('a',{href:'#/settings'},'Settings',h('span',null,'›'))));
+ el.appendChild(h('div',{class:'card menu'},h('a',{href:'#/customers'},'Customers',h('span',null,'›')),h('a',{href:'#/products'},'Products & Catalog',h('span',null,'›')),h('a',{href:'#/reports'},'Reports',h('span',null,'›')),h('a',{href:'#/expenses',id:'m-exp'},'Pengeluaran',h('span',null,'›')),h('a',{href:'#/settings'},'Settings',h('span',null,'›'))));
  el.appendChild(h('p',{class:'sub'},'Revenue, laba, dan margin akan tampil di sini bersama modul Reports.'));
  const [c,p,i]=await Promise.all([api('customers.list'),api('products.list'),S.cache.inv?Promise.resolve(S.cache.inv):api('invoices.list')]);if(my!==S.seq)return;S.cache.inv=i;
  [['Customers',c.length],['Products',p.length],['Invoices',i.length]].forEach(x=>k.appendChild(h('div',{class:'kpi'},h('span',{class:'sub'},'Total '+x[0]),h('b',null,x[1]))));}
