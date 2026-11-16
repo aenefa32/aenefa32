@@ -117,14 +117,6 @@ function shareSheet(v){const iv=v.invoice;let url='';
   });}).catch(e=>{status.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},'Gagal membuat PDF: '+(e&&e.message||e)));});
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
-// Ketuk "PDF & WhatsApp": langsung buka chat WhatsApp ke nomor pelanggan dengan pesan terisi.
-// Tanpa nomor: buka WhatsApp saja (pilih kontak sendiri). Catatan: tautan WhatsApp tidak bisa melampirkan file; PDF dikirim lewat "Simpan / bagikan PDF".
-function sendWA(v){const iv=v.invoice;if(iv.state==='Cancelled'){A.toast('Invoice dibatalkan tidak bisa dibagikan.');return;}
- if(iv.state==='Draft'){shareSheet(v);return;}// Draft: tampilkan peringatan dulu
- const s=(S.boot&&S.boot.settings)||{},link=waLink(v,s)||'https://wa.me/?text='+encodeURIComponent(waText(v,s));
- const a=document.createElement('a');a.href=link;a.target='_blank';a.rel='noopener';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),500);
- if(!waNumber(iv.cust_whatsapp))A.toast('Nomor WhatsApp pelanggan belum diisi. Pilih kontak di WhatsApp.');}
-A.sendWA=sendWA;
 A.pdf={build:build,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
 A.shareSheet=shareSheet;
 });

@@ -144,8 +144,7 @@ function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='o
   const r=await ui.confirm({title:'Hapus invoice?',message:msg,danger:true,okText:'Hapus Invoice',cancelText:'Kembali'});if(!r)return;
   try{await api('invoices.delete',{invoice_id:iv.invoice_id,ver:v.ver});A.toast('Invoice dihapus');location.hash='#/home';}catch(e){ui.banner(errBox,e.message);}},'b-del');
  el.appendChild(bar);if(v.paid>0)el.appendChild(h('p',{class:'sub',id:'b-del-hint'},'Hapus invoice tersedia setelah semua pembayarannya dibatalkan (void).'));
- if(iv.state!=='Cancelled')el.appendChild(h('button',{class:'btn pdfw',type:'button',id:'b-pdf',onclick:()=>A.sendWA(v)},'Kirim WhatsApp'));
- if(iv.state!=='Cancelled')el.appendChild(h('button',{class:'linkbtn',type:'button',id:'b-pdfonly',style:'display:block;margin:6px auto 0',onclick:()=>A.shareSheet(v)},'Simpan / bagikan PDF'));
+ if(iv.state!=='Cancelled')el.appendChild(h('button',{class:'btn pdfw',type:'button',id:'b-pdf',onclick:()=>A.shareSheet(v)},'Kirim WhatsApp'));
  // pembayaran
  el.appendChild(h('h2',{class:'sec'},'Pembayaran'));
  if(!v.payments.length)el.appendChild(h('p',{class:'sub'},'Belum ada pembayaran.'));
