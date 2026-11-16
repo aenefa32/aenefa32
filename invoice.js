@@ -1,7 +1,7 @@
 /* AeneFlow - invoice.js: editor invoice, detail invoice, pembayaran (DP/cicilan/pelunasan), batal. Semua teks lewat textContent. */
 (window.AeneModules=window.AeneModules||[]).push(function(A){'use strict';
 const h=A.h,ui=A.ui,rp=A.rp,fdate=A.fdate,S=A.S,api=A.api,calc=window.AeneCalc.calcTotals;
-const METHODS=['Bank Transfer','Cash','QRIS','E-wallet'];
+const METHODS=['BCA','BRI','Mandiri'];
 const PILL={Paid:['p-paid','Paid'],'Partially Paid':['p-part','Partially Paid'],Unpaid:['p-unpaid','Unpaid'],Overdue:['p-over','Overdue'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Cancelled']};
 const pill=s=>{const p=PILL[s]||['p-draft',s];return h('span',{class:'pill '+p[0]},p[1]);};
 const blankItem=()=>({item_id:'',product_id:'',name:'',description:'',unit:'pcs',qty:1,unit_price:0,cost_price:''});
@@ -32,7 +32,7 @@ async function vEdit(el,my){
   const cur1=st.customer_id?activeC.find(c=>c.customer_id===st.customer_id):null;
   cbox.appendChild(h('div',{class:'row'},sel,h('button',{class:'btn',type:'button',onclick:quickAdd},'+ Baru')));
   // info pelanggan terpilih + tombol Ubah (memperbarui data pelanggan; invoice ini ikut memakai data barunya saat disimpan)
-  if(cur1){cbox.appendChild(h('div',{class:'cinfo',id:'f-cinfo'},h('div',{class:'cname'},cur1.name+(cur1.organization?' · '+cur1.organization:'')),h('div',{class:'sub',id:'f-cwa'},cur1.whatsapp?'WhatsApp '+cur1.whatsapp:'WhatsApp belum diisi'),h('div',{class:'sub',id:'f-caddr'},cur1.address?cur1.address:'Alamat belum diisi')));
+  if(cur1){cbox.appendChild(h('div',{class:'cinfo',id:'f-cinfo'},h('div',{class:'cname'},cur1.name+(cur1.organization?' · '+cur1.organization:'')),h('div',{class:'sub',id:'f-cwa'},cur1.whatsapp?'WhatsApp '+cur1.whatsapp:'WhatsApp belum diisi'),h('div',{class:'sub',id:'f-caddr'},(function(){const a=String(cur1.address||'').trim(),t=String(cur1.city||'').trim(),r=!t||a.toLowerCase().indexOf(t.toLowerCase())>=0?a:(a?a+', '+t:t);return r||'Alamat belum diisi';})())));
    cbox.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',id:'f-cust-edit',onclick:()=>editCust(cur1)},'Ubah data pelanggan')));
    if(st.refreshCust)cbox.appendChild(h('p',{class:'sub',id:'f-crefresh'},'Data pelanggan diperbarui. Tekan Simpan agar invoice ini memakai data terbaru.'));}
   if(edit&&iv.customer_id&&st.customer_id&&st.customer_id!==iv.customer_id)cbox.appendChild(h('p',{class:'sub'},'Pelanggan pada invoice akan diganti.'));}
@@ -108,7 +108,7 @@ function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='o
  const reload=async()=>{S.cache={};const n=await api('invoices.get',{invoice_id:iv.invoice_id});draw(el,n,my);};
  const act=async(btn,fn)=>{await ui.run(btn,async()=>{const n=await fn();S.cache={};draw(el,n,my);},m=>ui.banner(errBox,m));};
  el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',null,h('div',{class:'sub'},iv.invoice_number),h('div',{class:'big',id:'d-cust'},iv.cust_name),iv.cust_org?h('div',{class:'sub'},iv.cust_org):null),pill(v.payment_status)),
-  h('div',{class:'row hero-b',style:'margin-top:10px;align-items:flex-end'},h('div',{class:'sub hero-c',id:'d-contact'},iv.cust_whatsapp?h('div',null,iv.cust_whatsapp):null,iv.cust_address?h('div',null,iv.cust_address):null),h('b',{class:'big hero-t',id:'d-total'},rp(t.grand_total)))));
+  h('div',{class:'row hero-b',style:'margin-top:10px;align-items:flex-end'},h('div',{class:'sub hero-c',id:'d-contact'},iv.cust_address?h('div',{id:'d-addr'},iv.cust_address):null,iv.cust_whatsapp?h('div',{id:'d-wa'},iv.cust_whatsapp):null),h('b',{class:'big hero-t',id:'d-total'},rp(t.grand_total)))));
  if(iv.state==='Cancelled')el.appendChild(h('div',{class:'banner'},'Invoice dibatalkan'+(iv.cancelled_reason?': '+iv.cancelled_reason:'')+'.'));
  if(iv.state==='Issued'){el.appendChild(h('div',{class:'kpis two'},h('div',{class:'kpi'},h('span',{class:'sub'},'Dibayar'),h('b',{id:'d-paid'},rp(v.paid))),h('div',{class:'kpi'},h('span',{class:'sub'},'Sisa'),(v.balance===0?h('b',{id:'d-bal',class:'lunas'},'✓ Lunas'):h('b',{id:'d-bal'},rp(v.balance))))));}
  // item
@@ -139,19 +139,40 @@ function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='o
   el.appendChild(h('div',{class:'item pay'+(ok?'':' void')},h('div',{class:'row'},h('div',null,h('b',null,rp(p.amount)),h('span',{class:'sub'},' · '+p.payment_type)),ok?null:h('span',{class:'pill p-cancel'},'Dibatalkan')),
    h('div',{class:'sub'},fdate(p.payment_date)+' · '+p.method+(p.reference_no?' · '+p.reference_no:'')),p.notes?h('div',{class:'sub'},p.notes):null,!ok&&p.void_reason?h('div',{class:'sub'},'Alasan: '+p.void_reason):null,
    ok&&iv.state!=='Cancelled'?h('button',{class:'linkbtn',type:'button','data-void':p.payment_id,onclick:async e=>{const btn=e.currentTarget,r=await ui.confirm({title:'Batalkan pembayaran?',message:rp(p.amount)+' ('+p.method+') akan ditandai dibatalkan. Catatan tetap tersimpan.',reason:{label:'Alasan pembatalan (wajib)',required:true},danger:true,okText:'Batalkan Pembayaran',cancelText:'Kembali'});if(!r)return;act(btn,()=>api('payments.void',{payment_id:p.payment_id,reason:r.reason}));}},'Batalkan pembayaran'):null));});
- // status order (hanya baca; pengelolaan di R3)
- if(v.order)el.appendChild(h('div',{class:'card'},h('div',{class:'sub'},'Status pesanan'),h('div',{class:'row'},h('b',{id:'d-order'},v.order.fulfillment_status),v.order.deadline_date?h('span',{class:'sub'},'Deadline '+fdate(v.order.deadline_date)):null),h('div',{class:'sub'},'Pengelolaan status & pengiriman hadir di rilis berikutnya.')));
+ if(v.order)el.appendChild(orderCard(v,reload,errBox));
  if(iv.notes)el.appendChild(h('div',{class:'card'},h('div',{class:'sub'},'Catatan'),h('div',{class:'pre'},iv.notes)));
  // laba internal
  if(owner&&iv.state!=='Cancelled'){const pr=v.profit;el.appendChild(h('div',{class:'card internal'},h('div',{class:'row'},h('b',null,'Laba internal'),h('span',{class:'pill p-draft'},'Tidak tampil di PDF')),
   pr.revenue_costed>0?h('div',null,h('div',{class:'row'},h('span',null,'Laba kotor'),h('b',{id:'d-profit'},rp(pr.gross_profit))),h('div',{class:'row'},h('span',null,'Margin'),h('b',null,pr.margin_pct===null?'—':pr.margin_pct+'%'))):h('div',{class:'sub'},'Belum ada item dengan harga modal.'),
   pr.uncosted_lines>0?h('div',{class:'sub'},pr.uncosted_lines+' item belum punya modal dan tidak dihitung ('+pr.cost_coverage_pct+'% omzet bermodal).'):null));}
 }
+const ordVer=o=>String(o.updated_at||o.created_at||'');
+const ORD_ST=['New Order','In Production','Ready to Ship','Shipped'];
+function orderCard(v,reload,errBox){const iv=v.invoice,o=v.order,can=iv.state==='Issued',card=h('div',{class:'card ordc',id:'ord-card'});
+ const ship=(v.shipments||[]).find(x=>x.status!=='Voided');
+ card.appendChild(h('div',{class:'row'},h('div',{class:'sub'},'Status pesanan'),A.ostPill(o.fulfillment_status,v.payment_status,'d-order')));
+ const dl=h('div',{class:'row',style:'margin-top:6px'},h('span',{class:'sub',id:'d-deadline'},'Deadline: '+(o.deadline_date?fdate(o.deadline_date):'belum diatur')),can?h('button',{class:'linkbtn',type:'button',id:'o-dl',onclick:()=>dlForm(v,reload)},o.deadline_date?'Ubah':'Atur'):null);card.appendChild(dl);
+ if(ship)card.appendChild(h('div',{class:'row'},h('span',{class:'sub',id:'d-shipdate'},'Dikirim: '+fdate(ship.ship_date)),can?h('button',{class:'linkbtn',type:'button',id:'o-sd',onclick:()=>shipForm({invoice_id:iv.invoice_id,ver:ordVer(o),ship_date:ship.ship_date},reload)},'Ubah'):null));
+ if(can){card.appendChild(h('div',{class:'chips ordchips',role:'group','aria-label':'Ubah status pesanan'},...ORD_ST.map(st=>h('button',{class:'chip '+A.OST[st][1],type:'button','data-st':st,'aria-pressed':String(o.fulfillment_status===st),onclick:()=>setStatus({invoice_id:iv.invoice_id,ver:ordVer(o),cur:o.fulfillment_status,balance:v.balance},st,reload,m=>ui.banner(errBox,m))},A.OST[st][0]))));
+  card.appendChild(h('div',{class:'sub'},'Status bisa dimajukan atau dikembalikan bila salah ketuk. Completed otomatis saat pesanan Shipped dan invoice sudah lunas.'));}
+ else card.appendChild(h('div',{class:'sub'},'Status tidak bisa diubah karena invoice belum terbit atau sudah dibatalkan.'));
+ return card;}
+function dlForm(v,reload){const iv=v.invoice,o=v.order;ui.sheet('Deadline pesanan',(b,close)=>{const dt=h('input',{type:'date',value:o.deadline_date||'','aria-label':'Deadline',id:'o-dlin'});b.appendChild(ui.field('Deadline selesai',dt));
+ const go=h('button',{class:'btn pri',type:'button',id:'o-dlsave'},'Simpan');go.addEventListener('click',()=>ui.run(go,async()=>{await api('orders.update',{invoice_id:iv.invoice_id,ver:ordVer(o),deadline_date:dt.value});close();A.toast('Deadline disimpan');await reload();},m=>ui.banner(b,m)));
+ b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',onclick:close},'Batal'),go));});}
+let ordBusy=false;
+async function setStatus(info,st,done,fail){if(ordBusy||info.cur===st)return;
+ if(st==='Shipped'){shipForm(Object.assign({fromStatus:true},info),done,fail);return;}
+ ordBusy=true;try{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});A.toast('Status: '+st);await done();}catch(e){if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}}
+function shipForm(info,reload,fail){ui.sheet('Tanggal kirim',(b,close)=>{const dt=h('input',{type:'date',value:info.ship_date||ui.today(),'aria-label':'Tanggal kirim',id:'o-sdin'});b.appendChild(ui.field('Tanggal kirim',dt));
+ const go=h('button',{class:'btn pri',type:'button',id:'o-sdsave'},info.fromStatus?'Tandai Shipped':'Simpan');go.addEventListener('click',()=>ui.run(go,async()=>{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:'Shipped',ship_date:dt.value});close();A.toast('Status: Shipped');await reload();},m=>ui.banner(b,m)));
+ b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',onclick:close},'Batal'),go));});}
+A.setOrderStatus=setStatus;A.ORD_ST=ORD_ST;
 function payForm(v,reload){const iv=v.invoice;ui.sheet('Catat pembayaran',(b,close)=>{const err=h('div');b.appendChild(err);
  b.appendChild(h('div',{class:'sub'},'Sisa tagihan '+rp(v.balance)));
  let amt=0;const am=ui.money(0,n=>{amt=n;},{'aria-label':'Nominal pembayaran',id:'p-amt'});
  const quick=h('div',{class:'chips'},h('button',{class:'chip',type:'button',id:'p-full',onclick:()=>am.setNum(v.balance)},'Lunasi sisa'),h('button',{class:'chip',type:'button',onclick:()=>am.setNum(Math.round(v.balance/2))},'50% sisa'));
- const mt=ui.select(METHODS.map(m=>[m,m]),'Bank Transfer',{'aria-label':'Metode'}),dt=h('input',{type:'date',value:ui.today(),'aria-label':'Tanggal bayar'}),rf=ui.text({placeholder:'No. referensi (opsional)','aria-label':'Referensi',maxlength:'100'}),nt=ui.text({placeholder:'Catatan (opsional)','aria-label':'Catatan',maxlength:'300'});
+ const mt=ui.select(METHODS.map(m=>[m,m]),'BCA',{'aria-label':'Metode'}),dt=h('input',{type:'date',value:ui.today(),'aria-label':'Tanggal bayar'}),rf=ui.text({placeholder:'No. referensi (opsional)','aria-label':'Referensi',maxlength:'100'}),nt=ui.text({placeholder:'Catatan (opsional)','aria-label':'Catatan',maxlength:'300'});
  b.appendChild(ui.field('Nominal (Rp)',am));b.appendChild(quick);b.appendChild(h('div',{class:'grid2'},ui.field('Metode',mt),ui.field('Tanggal bayar',dt)));b.appendChild(ui.field('Referensi',rf));b.appendChild(ui.field('Catatan',nt));
  b.appendChild(h('div',{class:'sub'},v.paid===0?'Pembayaran pertama dicatat sebagai DP, pelunasan bila sama dengan sisa.':'Dicatat sebagai cicilan, atau pelunasan bila sama dengan sisa.'));
  const go=h('button',{class:'btn pri',type:'button',id:'p-save'},'Simpan Pembayaran');

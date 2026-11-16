@@ -74,22 +74,46 @@ function param(k){const q=(location.hash.split('?')[1]||'');const o=new URLSearc
 const skel=el=>{for(let i=0;i<4;i++)el.appendChild(h('div',{class:'skel'}));};
 
 // ---------- halaman ----------
+const OST={'New Order':['Belum diproses','o-new'],'In Production':['In Production','o-prod'],'Ready to Ship':['Ready to Ship','o-ready'],'Shipped':['Shipped','o-ship'],'Completed':['\u2713 Completed','o-done']};
+// Completed = otomatis saat pesanan Shipped dan invoice Paid (atau status lama 'Completed' hasil impor)
+function effStatus(f,pay){return f==='Completed'||(f==='Shipped'&&pay==='Paid')?'Completed':f;}
+function ostPill(f,pay,id){const e=effStatus(f,pay),m=OST[e]||[e,'o-new'];return h('span',{class:'pill '+m[1],id:id||null},m[0]);}
 const PILL={Paid:['p-paid','Paid'],'Partially Paid':['p-part','Partially Paid'],Unpaid:['p-unpaid','Unpaid'],Overdue:['p-over','Overdue'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Cancelled']};
-const TABS=[['Invoices'],['Unpaid'],['Paid'],['Cancelled'],['New Orders',1],['In Production',1],['Ready to Ship',1],['Shipped',1],['Completed',1]];
+const TABS=[['Invoices'],['Unpaid'],['Paid'],['Cancelled'],['Belum Diproses'],['In Production'],['Ready to Ship'],['Shipped'],['Completed']]
+const FUL={'Belum Diproses':'New Order','In Production':'In Production','Ready to Ship':'Ready to Ship','Shipped':'Shipped','Completed':'Completed'};;
 const OPEN=['Unpaid','Partially Paid','Overdue'];
+// ---------- baris invoice di Home: geser ke kiri = pilih status pesanan ----------
+const SWW=232;
+function closeSw(){if(S.openSw){S.openSw.classList.remove('open');S.openSw=null;}}
+function rowCard(x){const p=PILL[x.payment_status]||['p-draft',x.payment_status],iss=x.state==='Issued'&&x.fulfillment_status,done=iss&&effStatus(x.fulfillment_status,x.payment_status)==='Completed';return h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pills'},h('span',{class:'pill '+p[0]},p[1]),iss?ostPill(x.fulfillment_status,x.payment_status):null),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null),iss?h('div',{class:'sub',style:'margin-top:6px;min-height:18px;padding-right:64px'},x.deadline_date&&!done&&x.fulfillment_status!=='Shipped'?'Deadline '+fdate(x.deadline_date):''):null);}
+function rowEl(x){const card=rowCard(x);if(!(x.state==='Issued'&&x.fulfillment_status&&x.order_ver&&A.setOrderStatus&&A.ORD_ST))return card;
+ const info=()=>({invoice_id:x.invoice_id,ver:x.order_ver,cur:x.fulfillment_status,balance:x.balance});
+ const panel=h('div',{class:'swp-panel',role:'group','aria-label':'Ubah status pesanan '+x.invoice_number},...A.ORD_ST.map(st=>h('button',{type:'button',class:'swb '+OST[st][1]+(st===x.fulfillment_status?' on':''),'data-st':st,onclick:()=>{A.setOrderStatus(info(),st,async()=>{delete S.cache.inv;S.openSw=null;render();},m=>toast(m));}},OST[st][0])));
+ card.setAttribute('draggable','false');card.addEventListener('dragstart',e=>e.preventDefault());
+ const wrap=h('div',{class:'swp'},panel,card);
+ const tg=h('button',{type:'button',class:'swt','aria-label':'Ubah status pesanan '+x.invoice_number,onclick:()=>{const o=wrap.classList.contains('open');closeSw();if(!o){wrap.classList.add('open');S.openSw=wrap;}}},'Status ‹');wrap.appendChild(tg);
+ let sx=0,sy=0,base=0,dx=0,drag=false,moved=false,swallow=false;
+ card.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;sx=e.clientX;sy=e.clientY;dx=0;drag=true;moved=false;base=wrap.classList.contains('open')?-SWW:0;});
+ card.addEventListener('pointermove',e=>{if(!drag)return;const mx=e.clientX-sx,my=e.clientY-sy;
+  if(!moved){if(Math.abs(mx)>10&&Math.abs(mx)>Math.abs(my)*1.2){moved=true;if(S.openSw&&S.openSw!==wrap)closeSw();if(card.setPointerCapture){try{card.setPointerCapture(e.pointerId);}catch(_){}}card.style.transition='none';wrap.classList.add('drg');}else if(Math.abs(my)>10){drag=false;return;}}
+  if(moved){dx=Math.max(-SWW,Math.min(0,base+mx));card.style.transform='translateX('+dx+'px)';}});
+ const end=()=>{if(!drag)return;drag=false;if(!moved)return;card.style.transition='';card.style.transform='';setTimeout(()=>wrap.classList.remove('drg'),220);const open=base===0?dx<-50:dx<-SWW+50;wrap.classList.toggle('open',open);S.openSw=open?wrap:(S.openSw===wrap?null:S.openSw);swallow=true;setTimeout(()=>{swallow=false;},350);};
+ card.addEventListener('pointerup',end);card.addEventListener('pointercancel',end);
+ card.addEventListener('click',e=>{if(swallow){e.preventDefault();e.stopPropagation();return;}if(wrap.classList.contains('open')){e.preventDefault();closeSw();}},true);
+ return wrap;}
 async function vHome(el,my){
- el.appendChild(h('div',{class:'chips',role:'group','aria-label':'Filter'},...TABS.map(t=>h('button',{class:'chip',type:'button','aria-pressed':String(S.tab===t[0]),disabled:!!t[1],title:t[1]?'Menunggu modul Order Fulfillment':'',onclick:()=>{S.tab=t[0];render();}},t[0]))));
+ el.appendChild(h('div',{class:'chips',role:'group','aria-label':'Filter'},...TABS.map(t=>h('button',{class:'chip',type:'button','aria-pressed':String(S.tab===t[0]),onclick:()=>{S.tab=t[0];render();}},t[0]))));
+ setTimeout(()=>{const c=el.querySelector('.chip[aria-pressed="true"]');if(c&&c.scrollIntoView)c.scrollIntoView({inline:'center',block:'nearest'});},0);
  if(S.showSearch){const i=h('input',{class:'search',type:'search',placeholder:'Cari nomor invoice atau nama pelanggan','aria-label':'Cari invoice',value:S.q,oninput:e=>{S.q=e.target.value;paint();}});el.appendChild(i);}
  const sum=h('div'),list=h('div');el.appendChild(sum);el.appendChild(list);skel(list);
  if(!S.cache.inv)S.cache.inv=await api('invoices.list');if(my!==S.seq)return;const all=S.cache.inv;
  const open=all.filter(x=>OPEN.indexOf(x.payment_status)>=0);
- sum.appendChild(h('div',{class:'kpis'},...[['Piutang',rp(open.reduce((n,x)=>n+x.balance,0))],['Diterima',rp(all.filter(x=>x.state==='Issued').reduce((n,x)=>n+x.paid,0))],['Invoice',all.filter(x=>x.state!=='Cancelled').length]].map(k=>h('div',{class:'kpi'},h('span',{class:'sub'},k[0]),h('b',null,k[1])))));
- if(TABS.some(t=>t[0]===S.tab&&t[1]))el.appendChild(h('p',{class:'sub'},'Tab yang redup menunggu modul Order Fulfillment.'));
+ sum.appendChild(h('div',{class:'kpis k3'},...[['Belum Bayar',rp(open.reduce((n,x)=>n+x.balance,0))],['Diterima',rp(all.filter(x=>x.state==='Issued').reduce((n,x)=>n+x.paid,0))],['Invoice',all.filter(x=>x.state!=='Cancelled').length]].map(k=>h('div',{class:'kpi'},h('span',{class:'sub'},k[0]),h('b',null,k[1])))));
  function paint(){list.textContent='';const q=S.q.trim().toLowerCase();let rows=all.slice().sort((a,b)=>String(b.issue_date).localeCompare(String(a.issue_date))||String(b.invoice_number).localeCompare(String(a.invoice_number)));
-  if(S.tab==='Unpaid')rows=rows.filter(x=>OPEN.indexOf(x.payment_status)>=0);else if(S.tab==='Paid')rows=rows.filter(x=>x.payment_status==='Paid');else if(S.tab==='Cancelled')rows=rows.filter(x=>x.state==='Cancelled');else rows=rows.filter(x=>x.state!=='Cancelled');
+  if(S.tab==='Unpaid')rows=rows.filter(x=>OPEN.indexOf(x.payment_status)>=0);else if(S.tab==='Paid')rows=rows.filter(x=>x.payment_status==='Paid');else if(S.tab==='Cancelled')rows=rows.filter(x=>x.state==='Cancelled');else if(FUL[S.tab])rows=rows.filter(x=>x.state==='Issued'&&effStatus(x.fulfillment_status,x.payment_status)===FUL[S.tab]);else rows=rows.filter(x=>x.state!=='Cancelled');
   if(q)rows=rows.filter(x=>String(x.invoice_number).toLowerCase().indexOf(q)>=0||String(x.cust_name).toLowerCase().indexOf(q)>=0);
-  if(!rows.length){list.appendChild(empty(S.tab==='Cancelled'&&!q?'Belum ada invoice dibatalkan':(all.length?'Tidak ada invoice':'Belum ada invoice'),S.tab==='Cancelled'&&!q?'Invoice yang dibatalkan akan tampil di tab ini.':all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
-  rows.slice(0,300).forEach(x=>{const p=PILL[x.payment_status]||['p-draft',x.payment_status];list.appendChild(h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pill '+p[0]},p[1]),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null)));});
+  if(!rows.length){list.appendChild(empty(S.tab==='Cancelled'&&!q?'Belum ada invoice dibatalkan':FUL[S.tab]&&!q?'Belum ada pesanan di tab '+S.tab:(all.length?'Tidak ada invoice':'Belum ada invoice'),S.tab==='Cancelled'&&!q?'Invoice yang dibatalkan akan tampil di tab ini.':all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
+  rows.slice(0,300).forEach(x=>list.appendChild(rowEl(x)));
   if(rows.length>300)list.appendChild(h('p',{class:'sub'},'Menampilkan 300 pertama dari '+rows.length+'. Gunakan pencarian untuk mempersempit.'));}
  paint();
  const f=h('button',{class:'fab',type:'button','aria-label':'Buat invoice baru',onclick:()=>{location.hash='#/invoice-edit';}},'+');document.body.appendChild(f);}
@@ -111,7 +135,7 @@ async function vSettings(el){const owner=S.boot.user.role==='owner';
 async function vImport(el){if(S.boot.user.role!=='owner')return el.appendChild(empty('Khusus pemilik','Hanya pemilik yang boleh mengimpor data.'));
  if(!window.AeneImport)return el.appendChild(h('div',{class:'banner',role:'alert'},'Modul impor tidak termuat.'));window.AeneImport.mount(el,{api:api});}
 window.AeneApp={api:api,logout:logout};
-const A={h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
+const A={eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
 (window.AeneModules||[]).forEach(f=>{try{f(A);}catch(e){console.error('Modul gagal dimuat',e);}});
 
 // ---------- mulai ----------
