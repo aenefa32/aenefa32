@@ -66,7 +66,7 @@ async function vSettings(el){
   if(!p.business_name){ui.banner(errBox,'Nama usaha wajib diisi.');return;}
   ui.run(go,async()=>{const r=await api('settings.save',{settings:p});S.boot.settings=r.settings;ui.banner(errBox,'');A.toast('Pengaturan disimpan');A.render();},m=>ui.banner(errBox,m));});
  el.appendChild(go);
- el.appendChild(h('div',{class:'card menu',style:'margin-top:14px'},h('a',{href:'#/import'},'Impor Data Historis',h('span',null,'›'))));
+ el.appendChild(h('div',{class:'card menu',style:'margin-top:14px'},h('a',{href:'#/cashset',id:'s-cashset'},'Cashflow: saldo awal & kategori',h('span',null,'›')),h('a',{href:'#/import'},'Impor Data Historis',h('span',null,'›'))));
  el.appendChild(h('p',{class:'sub'},'AeneFlow · R2. Manajemen pesanan, Cashflow, dan Google Calendar hadir di rilis berikutnya.'));}
 A.ROUTES.settings={t:'Settings',nav:'more',back:'more',v:vSettings};
 });
