@@ -64,7 +64,7 @@ async function build(v,s){
  if(t.discount)rows.push(['Diskon'+(iv.discount_type==='percent'?' '+iv.discount_value+'%':''),'- '+money(t.discount)]);
  if(t.tax)rows.push(['PPN '+iv.tax_rate+'%',money(t.tax)]);
  if(Number(iv.shipping_fee))rows.push(['Ongkir',money(iv.shipping_fee)]);
- if(Number(iv.extra_fee))rows.push([iv.extra_fee_label||'Biaya tambahan',money(iv.extra_fee)]);
+ A.extrasOf(iv).forEach(l=>{const t=Math.round(l.qty*l.unit_price);if(t)rows.push([clean(l.name)+(l.qty!==1?' ('+l.qty+' x '+money(l.unit_price)+')':''),money(t)]);});
  need(rows.length*16+70);y-=6;
  rows.forEach(r=>{tx(r[0],R-130,y,9.5,F,mute,true);tx(r[1],R,y,9.5,F,ink,true);y-=16;});
  y-=12;page.drawRectangle({x:R-250,y:y-6,width:250,height:26,color:blush});tx('TOTAL',R-130,y+2,10,B,rose,true);tx(money(t.grand_total),R-8,y+2,12.5,B,rose,true);y-=28;
@@ -117,6 +117,14 @@ function shareSheet(v){const iv=v.invoice;let url='';
   });}).catch(e=>{status.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},'Gagal membuat PDF: '+(e&&e.message||e)));});
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
+// Ketuk "PDF & WhatsApp": langsung buka chat WhatsApp ke nomor pelanggan dengan pesan terisi.
+// Tanpa nomor: buka WhatsApp saja (pilih kontak sendiri). Catatan: tautan WhatsApp tidak bisa melampirkan file; PDF dikirim lewat "Simpan / bagikan PDF".
+function sendWA(v){const iv=v.invoice;if(iv.state==='Cancelled'){A.toast('Invoice dibatalkan tidak bisa dibagikan.');return;}
+ if(iv.state==='Draft'){shareSheet(v);return;}// Draft: tampilkan peringatan dulu
+ const s=(S.boot&&S.boot.settings)||{},link=waLink(v,s)||'https://wa.me/?text='+encodeURIComponent(waText(v,s));
+ const a=document.createElement('a');a.href=link;a.target='_blank';a.rel='noopener';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),500);
+ if(!waNumber(iv.cust_whatsapp))A.toast('Nomor WhatsApp pelanggan belum diisi. Pilih kontak di WhatsApp.');}
+A.sendWA=sendWA;
 A.pdf={build:build,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
 A.shareSheet=shareSheet;
 });

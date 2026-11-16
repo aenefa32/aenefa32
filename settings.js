@@ -21,7 +21,7 @@ async function vSettings(el){
  try{const r=await api('bootstrap');if(r&&r.settings)S.boot.settings=r.settings;}catch(e){}
  const owner=S.boot.user.role==='owner',s=S.boot.settings||{};
  const errBox=h('div');el.appendChild(errBox);
- el.appendChild(h('div',{class:'card'},h('div',{class:'sub'},'Akun'),h('div',null,S.boot.user.email+' · '+S.boot.user.role),h('div',{style:'margin-top:10px'},h('button',{class:'btn',type:'button',onclick:()=>window.AeneApp.logout?window.AeneApp.logout('Anda sudah keluar.'):location.reload()},'Keluar'))));
+ el.appendChild(h('div',{class:'card'},h('div',{class:'sub'},'Akun'),h('div',null,S.boot.user.email+' · '+S.boot.user.role),h('div',{style:'margin-top:10px'},h('button',{class:'btn',type:'button',onclick:()=>window.AeneApp.logout?window.AeneApp.logout('Anda sudah keluar.'):location.reload()},'Keluar'),' ',h('button',{class:'btn',type:'button',onclick:()=>window.AeneApp.logoutAll&&window.AeneApp.logoutAll()},'Keluar dari semua perangkat'))));
  if(!owner){el.appendChild(h('p',{class:'sub'},'Hanya pemilik yang dapat mengubah pengaturan.'));return;}
  const f={business_name:ui.text({value:s.business_name||'',maxlength:'100','aria-label':'Nama usaha',id:'s-name'}),business_address:ui.area(s.business_address||'',{rows:'2',maxlength:'300','aria-label':'Alamat usaha'}),business_phone:ui.text({value:s.business_phone||'',inputmode:'tel',maxlength:'30','aria-label':'Telepon usaha'}),business_email:ui.text({value:s.business_email||'',inputmode:'email',maxlength:'100','aria-label':'Email usaha'}),
   default_due_days:ui.text({value:String(s.default_due_days==null||s.default_due_days===''?7:s.default_due_days),inputmode:'numeric','aria-label':'Jatuh tempo default'}),tax_default_rate:ui.text({value:String(s.tax_default_rate||0),inputmode:'decimal','aria-label':'PPN default'}),
@@ -32,6 +32,15 @@ async function vSettings(el){
   bbox.appendChild(h('div',{class:'card'},h('div',{class:'row'},h('b',null,'Rekening '+(n+1)),h('button',{class:'linkbtn',type:'button',onclick:()=>{bk.splice(n,1);drawBanks();}},'Hapus')),bn,no,ho));});
   if(bk.length<5)bbox.appendChild(h('button',{class:'btn',type:'button',id:'s-addbank',onclick:()=>{bk.push({bank:'',number:'',holder:''});drawBanks();}},'+ Tambah rekening'));}
  drawBanks();
+ // katalog biaya tambahan (dipilih dari menu di Editor Invoice)
+ const xc=(A.catalogOf?A.catalogOf(s):[]).slice(0,30).map(c=>({name:String(c.name),price:Number(c.price)||0})),xbox=h('div');
+ function drawCat(){xbox.textContent='';
+  xc.forEach((c,n)=>{const nm=ui.text({value:c.name,placeholder:'Nama biaya (mis. Packaging Tulle)','aria-label':'Nama biaya '+(n+1),maxlength:'60'}),pr=ui.money(c.price,v=>{c.price=v;},{'aria-label':'Harga satuan biaya '+(n+1)});
+   nm.addEventListener('input',()=>{c.name=nm.value;});
+   xbox.appendChild(h('div',{class:'card'},h('div',{class:'row'},h('b',null,'Biaya '+(n+1)),h('button',{class:'linkbtn',type:'button','aria-label':'Hapus biaya '+(n+1),onclick:()=>{xc.splice(n,1);drawCat();}},'Hapus')),ui.field('Nama',nm),ui.field('Harga satuan (Rp)',pr)));});
+  if(!xc.length)xbox.appendChild(h('p',{class:'sub',id:'s-cat-empty'},'Belum ada biaya tambahan. Contoh: Packaging Tulle Rp 2.500, Packaging Mika Rp 2.500, Card.'));
+  if(xc.length<30)xbox.appendChild(h('button',{class:'btn',type:'button',id:'s-addcat',onclick:()=>{xc.push({name:'',price:0});drawCat();}},'+ Tambah biaya'));}
+ drawCat();
  // logo: perubahan baru dikirim bila diubah (logoDirty), supaya simpan biasa tidak mengirim ulang gambar
  let logo=LOGO_RE.test(s.business_logo||'')?s.business_logo:'',logoDirty=false;const lbox=h('div',{class:'logobox'}),lmsg=h('div');
  function drawLogo(){lbox.textContent='';
@@ -46,11 +55,13 @@ async function vSettings(el){
  el.appendChild(h('h2',{class:'sec'},'Profil usaha'));el.appendChild(h('div',{class:'card'},ui.field('Nama usaha',f.business_name),ui.field('Alamat',f.business_address),ui.field('Telepon',f.business_phone),ui.field('Email',f.business_email)));
  el.appendChild(h('h2',{class:'sec'},'Logo usaha'));el.appendChild(h('div',{class:'card'},lbox,lmsg));
  el.appendChild(h('h2',{class:'sec'},'Rekening bank'));el.appendChild(bbox);
+ el.appendChild(h('h2',{class:'sec'},'Biaya tambahan'));el.appendChild(h('p',{class:'sub'},'Katalog biaya (packaging, kartu, dll). Di Editor Invoice tinggal pilih dari menu lalu isi jumlahnya.'));el.appendChild(xbox);
  el.appendChild(h('h2',{class:'sec'},'Aturan invoice'));el.appendChild(h('div',{class:'card'},h('div',{class:'grid2'},ui.field('Jatuh tempo (hari)',f.default_due_days),ui.field('PPN default (%)',f.tax_default_rate)),ui.field('Syarat & ketentuan default',f.terms_and_conditions)));
  el.appendChild(h('h2',{class:'sec'},'Template WhatsApp'));el.appendChild(h('div',{class:'card'},ui.field('Pesan',f.wa_template,'Kata kunci: {nama} {nomor} {total} {sisa} {jatuh_tempo} {bisnis}. PDF dibuat lewat tombol "PDF & WhatsApp" di detail invoice.')));
  const go=h('button',{class:'btn pri',type:'button',id:'s-save'},'Simpan Pengaturan');
  go.addEventListener('click',()=>{const clean=bk.filter(b=>b.bank.trim()||b.number.trim()||b.holder.trim());
   const p={business_name:f.business_name.value.trim(),business_address:f.business_address.value.trim(),business_phone:f.business_phone.value.trim(),business_email:f.business_email.value.trim(),default_due_days:ui.num(f.default_due_days.value),tax_default_rate:ui.num(f.tax_default_rate.value,true),terms_and_conditions:f.terms_and_conditions.value.trim(),wa_template:f.wa_template.value.trim()||DEF_WA,bank_accounts:clean.map(b=>({bank:b.bank.trim(),number:b.number.trim(),holder:b.holder.trim()}))};
+  p.extra_catalog=xc.filter(c=>c.name.trim()).map(c=>({name:c.name.trim(),price:c.price||0}));
   if(logoDirty)p.business_logo=logo;
   if(!p.business_name){ui.banner(errBox,'Nama usaha wajib diisi.');return;}
   ui.run(go,async()=>{const r=await api('settings.save',{settings:p});S.boot.settings=r.settings;ui.banner(errBox,'');A.toast('Pengaturan disimpan');A.render();},m=>ui.banner(errBox,m));});

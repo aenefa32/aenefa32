@@ -98,3 +98,18 @@ a.item.lnk{text-decoration:none;cursor:pointer}a.item.lnk:hover{border-color:var
 .chip[aria-pressed=true].o-new,.swb.on.o-new{background:#8A7F83;border-color:#8A7F83;color:#fff}.chip[aria-pressed=true].o-prod,.swb.on.o-prod{background:#7A62B3;border-color:#7A62B3;color:#fff}.chip[aria-pressed=true].o-ready,.swb.on.o-ready{background:#4A7FB5;border-color:#4A7FB5;color:#fff}.chip[aria-pressed=true].o-ship,.swb.on.o-ship{background:#3E8C86;border-color:#3E8C86;color:#fff}
 .chip.o-prod:not([aria-pressed=true]),.swb.o-prod:not(.on){color:#5B4690;border-color:#D6CBEA}.chip.o-ready:not([aria-pressed=true]),.swb.o-ready:not(.on){color:#2F5D8C;border-color:#C6DAEA}.chip.o-ship:not([aria-pressed=true]),.swb.o-ship:not(.on){color:#2A6762;border-color:#BFE2DE}.chip.o-new:not([aria-pressed=true]),.swb.o-new:not(.on){color:#6E5F63}
 .pills{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}.swp-panel{grid-template-columns:1fr 1fr}
+
+/* swipe kanan: pembayaran */
+.swp.openr>.item{transform:translateX(150px)}
+.swp-pay{position:absolute;top:0;left:0;bottom:0;width:150px;display:grid;grid-template-columns:1fr;gap:5px;padding:6px;background:#EAF3EC;align-content:center;visibility:hidden}
+.swp.openr .swp-pay,.swp.dr .swp-pay{visibility:visible}.swp.dr .swp-panel{visibility:hidden}
+.swb.pay-full{background:#3F7F57;border-color:#3F7F57;color:#fff}.swb[data-pay=part]{color:#3F7F57;border-color:#BFD8C8}
+.swt-l{right:72px}.swp.openr .swt-l{display:none}
+
+/* biaya tambahan di editor */
+.exrow{border-top:1px solid #EFE3E7;padding:10px 0 4px}.exrow:first-of-type{border-top:0}
+.exgrid{display:grid;grid-template-columns:1.3fr .8fr 1fr;gap:8px;align-items:end;margin-top:6px}.exsub{text-align:right;padding-bottom:12px}.ex-sub{font-size:13px}
+.x-del{background:none;border:0;color:#9A3E52;font-size:12px;font-weight:600;min-height:32px;padding:0;cursor:pointer;display:block;margin-left:auto}
+.exadd{margin-top:8px}.exadd select{width:100%}
+
+.mark-img{display:block;margin:0 auto 6px;width:72px;height:72px;border-radius:22%;box-shadow:0 6px 18px rgba(156,95,112,.25)}
