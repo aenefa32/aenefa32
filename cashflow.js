@@ -19,7 +19,7 @@ function addForm(r,done,opt){opt=opt||{};ui.sheet(opt.title||'Catat',(b,close)=>
  let kind='out',amt=0;const kinds=opt.onlyOut?[['out','Pengeluaran']]:[['out','Pengeluaran'],['in','Pemasukan'],['transfer','Transfer']];
  const am=ui.money(0,n=>{amt=n;},{'aria-label':'Nominal',id:'cf-amt'}),dt=h('input',{type:'date',id:'cf-date',value:ui.today(),'aria-label':'Tanggal'}),
   acc=ui.select(ACCTS.map(a=>[a,a]),'BCA',{id:'cf-acc','aria-label':'Rekening'}),to=ui.select(ACCTS.map(a=>[a,a]),'Tunai',{id:'cf-to','aria-label':'Rekening tujuan'}),
-  cat=h('select',{id:'cf-cat','aria-label':'Kategori'}),ds=ui.text({id:'cf-desc',maxlength:'200',placeholder:'mis. Mika 100 pcs','aria-label':'Keterangan'}),pt=ui.text({id:'cf-party',maxlength:'100',placeholder:'mis. Toko Kain Jaya (boleh kosong)','aria-label':'Pihak terkait'});
+  cat=h('select',{id:'cf-cat','aria-label':'Kategori'}),ds=ui.text({id:'cf-desc',maxlength:'200',placeholder:'mis. Mika 100 pcs (boleh kosong)','aria-label':'Keterangan'}),pt=ui.text({id:'cf-party',maxlength:'100',placeholder:'mis. Toko Kain Jaya (boleh kosong)','aria-label':'Pihak terkait'});
  const chips=h('div',{class:'chips',role:'group','aria-label':'Jenis',id:'cf-kinds'}),dyn=h('div');
  function drawCats(){cat.textContent='';(r.categories||[]).filter(c=>c.direction===kind).sort((x,y)=>(x.prive?1:0)-(y.prive?1:0)).forEach(c=>cat.appendChild(h('option',{value:c.category_id},c.name)));}
  function draw(){chips.textContent='';kinds.forEach(k=>chips.appendChild(h('button',{class:'chip','data-k':k[0],type:'button','aria-pressed':String(kind===k[0]),onclick:()=>{kind=k[0];draw();}},k[1])));
@@ -30,7 +30,6 @@ function addForm(r,done,opt){opt=opt||{};ui.sheet(opt.title||'Catat',(b,close)=>
  const go=h('button',{class:'btn pri',type:'button',id:'cf-save'},'Simpan');
  go.addEventListener('click',()=>{if(!(amt>0)){ui.banner(err,'Nominal harus lebih dari 0.');return;}
   if(kind!=='transfer'&&!cat.value){ui.banner(err,'Pilih kategori. Tambahkan di Pengaturan Cashflow bila belum ada.');return;}
-  if(kind!=='transfer'&&!ds.value.trim()){ui.banner(err,'Keterangan wajib diisi.');return;}
   if(kind==='transfer'&&acc.value===to.value){ui.banner(err,'Rekening asal dan tujuan tidak boleh sama.');return;}
   ui.run(go,async()=>{await api('cash.add',{kind:kind,amount:amt,date:dt.value,account:acc.value,to_account:to.value,category_id:kind==='transfer'?'':cat.value,description:ds.value.trim(),party:kind==='transfer'?'':pt.value.trim()});close();A.toast('Tercatat');done();},m=>ui.banner(err,m));});
  b.appendChild(go);});}
