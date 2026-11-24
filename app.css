@@ -144,3 +144,26 @@ a.item.lnk{text-decoration:none;cursor:pointer}a.item.lnk:hover{border-color:var
 .chip-manage{border-style:dashed}
 
 .note a{color:var(--warn);text-decoration:underline;font-weight:600}
+/* Anti-melebar di layar sempit (iPhone) */
+#col,#main{min-width:0;max-width:100%}.hero{overflow:hidden;max-width:100%}.hero-b{display:flex;gap:10px;min-width:0}.hero-c{flex:1 1 0;min-width:0;overflow-wrap:anywhere;word-break:break-word}.hero-t{flex:none;max-width:60%;overflow-wrap:normal}
+.grid2>*,.grid3>*,.fld{min-width:0}.fld input,.fld select,.fld textarea{max-width:100%}
+input[type=date]{min-width:0;max-width:100%;width:100%;-webkit-appearance:none;appearance:none;text-align:left;display:block}
+input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:1.2em}
+.item .row>b,.item .row>span{min-width:0;overflow-wrap:anywhere}
+/* pemilih katalog (cari) */
+.pick{display:block;width:100%;min-height:44px;text-align:left;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--mute);font:inherit;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}.pk-row{display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:48px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-align:left;cursor:pointer;width:100%}
+.pk-row span:first-child{min-width:0;overflow-wrap:anywhere;font-weight:600}.pk-row small{color:var(--mute);display:block;font-weight:400}.pk-row span:last-child{flex:none;font-weight:600}.pk-more{padding:8px 4px}
+
+/* Pemilih produk berpencarian */
+.pickbtn{width:100%;text-align:left;justify-content:flex-start;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pp-list{display:flex;flex-direction:column;gap:6px;margin:8px 0;max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.pp-it{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:48px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-align:left;cursor:pointer}
+.pp-it.pp-done{border-color:var(--deep);background:var(--blush)}.pp-n{font-weight:600}.pp-empty{padding:12px;text-align:center}
+/* Cegah layar melebar di iPhone (WebKit): grid tidak boleh melebar mengikuti isi, input tanggal tidak melampaui kartu */
+html,body{max-width:100%;overflow-x:clip}
+.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.grid3{grid-template-columns:minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.4fr)}
+.card,.item,.fld,.set-comp,.set-ed{min-width:0;max-width:100%}.fld input[type=date],.card input[type=date]{display:block;width:100%;min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;box-sizing:border-box;min-height:44px}
+.hero-b>*{min-width:0}.hero-t{font-size:clamp(14px,4.6vw,17px)}
+.item .row>*,.card .row>*{min-width:0}.item b,.card b{overflow-wrap:anywhere}
+@media(min-width:900px){.grid3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr)}}

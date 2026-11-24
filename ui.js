@@ -33,4 +33,17 @@ ui.confirm=function(o){return new Promise(res=>{let done=false;const fin=v=>{if(
    h('button',{class:'btn '+(o.danger?'danger':'pri'),type:'button',onclick:()=>{const r=ta?ta.value.trim():'';if(o.reason&&o.reason.required&&!r){err.textContent='Alasan wajib diisi.';return;}fin({reason:r});close();}},o.okText||'Lanjut')));},()=>fin(null));});};
 // jalankan aksi async pada tombol: cegah klik ganda, tampilkan error
 ui.run=async function(btn,fn,onErr){const t=btn.textContent;btn.disabled=true;btn.textContent='Memproses…';try{return await fn();}catch(e){if(onErr)onErr(e.message);else A.toast(e.message);}finally{btn.disabled=false;btn.textContent=t;}};
+
+// Pemilih katalog dengan pencarian (Versi 18): tombol -> lembar berisi kolom cari + daftar. Cocok untuk katalog besar (tanpa menggulir).
+ui.pick=function(prods,o){o=o||{};const btn=h('button',{class:'pick',type:'button','aria-label':o.label||'Pilih dari katalog'},o.text||'Cari & pilih dari katalog…');
+ btn.addEventListener('click',()=>ui.sheet(o.title||'Pilih dari katalog',(b,close)=>{
+  const q=h('input',{class:'search',type:'search',placeholder:'Ketik nama produk…','aria-label':'Cari produk',autocomplete:'off',autocapitalize:'none',enterkeyhint:'search'}),list=h('div',{class:'pk-list',id:'pk-list'}),LIM=40;
+  const norm=x=>String(x||'').toLowerCase();
+  function draw(){const t=norm(q.value).split(/\s+/).filter(Boolean);list.textContent='';
+   const hit=prods.filter(p=>{const hay=norm(p.name+' '+(p.category||'')+' '+(p.description||''));return t.every(w=>hay.indexOf(w)>=0);});
+   if(!hit.length){list.appendChild(h('div',{class:'sub pk-more'},'Tidak ada produk yang cocok.'));return;}
+   hit.slice(0,LIM).forEach(p=>list.appendChild(h('button',{class:'pk-row',type:'button','data-pid':p.product_id,onclick:()=>{close();o.onPick(p);}},h('span',null,p.name,p.category?h('small',null,p.category):null),h('span',null,o.fmt?o.fmt(p):''))));
+   if(hit.length>LIM)list.appendChild(h('div',{class:'sub pk-more'},'Menampilkan '+LIM+' dari '+hit.length+'. Ketik lebih spesifik untuk mempersempit.'));}
+  q.addEventListener('input',draw);b.appendChild(q);b.appendChild(list);draw();try{q.focus();}catch(e){}}));
+ return btn;};
 });

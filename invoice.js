@@ -5,14 +5,24 @@ const METHODS=['BCA','BRI','Mandiri'];
 const PILL={Paid:['p-paid','Lunas'],'Partially Paid':['p-part','Dibayar Sebagian'],Unpaid:['p-unpaid','Belum Dibayar'],Overdue:['p-over','Jatuh Tempo'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Dibatalkan']};
 const pill=s=>{const p=PILL[s]||['p-draft',s];return h('span',{class:'pill '+p[0]},p[1]);};
 const blankItem=()=>({item_id:'',product_id:'',name:'',description:'',unit:'pcs',qty:1,unit_price:0,cost_price:'',set:false,comps:[]});
-const blankSet=()=>({item_id:'',product_id:'',name:'',description:'',unit:'set',qty:1,unit_price:0,cost_price:'',set:true,comps:[]});
+// Pemilih produk dengan kolom cari (katalog banyak): ketik sebagian nama/kategori, semua kata harus cocok. multi=true: sheet tetap terbuka untuk menambah beberapa isi set.
+function pickProduct(prods,onPick,multi){ui.sheet(multi?'Tambah isi set':'Pilih dari katalog',(b,close)=>{
+ const q=h('input',{type:'search',class:'search',placeholder:'Cari nama produk atau kategori…','aria-label':'Cari produk',id:'pp-q',autocomplete:'off',autocapitalize:'off',enterkeyhint:'search'}),list=h('div',{class:'pp-list',id:'pp-list'}),cnt=h('div',{class:'sub',id:'pp-n'},'');let added=0;
+ const draw=()=>{const t=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);list.textContent='';let n=0,more=false;
+  for(const p of prods){const hay=(p.name+' '+(p.category||'')+' '+(p.sku||'')).toLowerCase();if(!t.every(w=>hay.indexOf(w)>=0))continue;if(n>=60){more=true;break;}n++;
+   list.appendChild(h('button',{type:'button',class:'pp-it','data-id':p.product_id,onclick:e=>{if(multi){onPick(p);added++;cnt.textContent=added+' isi ditambahkan';e.currentTarget.classList.add('pp-done');}else{close();onPick(p);}}},h('span',{class:'pp-n'},p.name),h('span',{class:'sub'},(p.category?p.category+' · ':'')+rp(p.sell_price))));}
+  if(!n)list.appendChild(h('div',{class:'sub pp-empty'},'Tidak ada produk yang cocok.'));else if(more)list.appendChild(h('div',{class:'sub pp-empty'},'Ketik lebih spesifik untuk mempersempit daftar.'));};
+ q.addEventListener('input',draw);b.appendChild(q);b.appendChild(cnt);b.appendChild(list);if(multi)b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn pri',type:'button',id:'pp-done',onclick:close},'Selesai')));draw();setTimeout(()=>{try{q.focus();}catch(e){}},60);});}
+const setNameNext=items=>{const used={};items.forEach(i=>{const m=/^Set Hampers ([A-Z])$/.exec(String(i.name||'').trim());if(m)used[m[1]]=1;});for(let c=65;c<91;c++){const L=String.fromCharCode(c);if(!used[L])return'Set Hampers '+L;}return'Set Hampers';};
+const blankSet=name=>({item_id:'',product_id:'',name:name||'',description:'',unit:'set',qty:1,unit_price:0,cost_price:'',set:true,comps:[]});
 const setCostOf=cs=>{let t=0;for(const c of cs){if(c.cost_price===''||c.cost_price==null)return'';t+=(Number(c.qty)||0)*Number(c.cost_price);}return cs.length?Math.round(t):'';};
 function setting(k,d){const v=S.boot&&S.boot.settings?S.boot.settings[k]:undefined;return v===undefined||v===''?d:v;}
 
 // ---------------- EDITOR ----------------
 async function vEdit(el,my){
  A.skel(el);const id=A.param('id'),dup=A.param('dup'),pre=A.param('cust');
- const [custs,prods,cur]=await Promise.all([api('customers.list'),api('products.list'),id||dup?api('invoices.get',{invoice_id:id||dup}):Promise.resolve(null)]);if(my!==S.seq)return;el.textContent='';
+ const pk=(id||dup)?A.peekDetail(id||dup):null;// salinan di memori (sudah dimuat di latar belakang): editor terbuka seketika
+ const [custs,prods,cur]=await Promise.all([api('customers.list'),api('products.list'),id||dup?(pk?Promise.resolve(pk):api('invoices.get',{invoice_id:id||dup})):Promise.resolve(null)]);if(my!==S.seq)return;el.textContent='';
  const edit=!!id,iv=cur?cur.invoice:null;
  if(edit&&iv.state==='Cancelled'){el.appendChild(A.empty('Invoice dibatalkan','Invoice yang sudah dibatalkan tidak bisa diubah.'));return;}
  const st={ver:cur?cur.ver:'',state:edit?iv.state:'New',paid:cur&&edit?cur.paid:0,hasShip:false,
@@ -23,6 +33,7 @@ async function vEdit(el,my){
  if(!edit)st.due=ui.addDays(st.issue,Number(setting('default_due_days',7)));
  let activeC=custs.slice(),manualOK=!!st.manual;
  const wrap=h('div',{class:'editor'}),errBox=h('div');
+ if(pk&&edit)api('invoices.get',{invoice_id:id}).then(n=>{if(my===S.seq&&n&&String(n.ver)!==String(pk.ver))ui.banner(errBox,'Invoice ini baru saja diubah dari perangkat lain. Buka ulang halaman ini agar tidak menimpa perubahan itu.');}).catch(()=>{});
  wrap.appendChild(errBox);
  wrap.appendChild(h('h2',{class:'sec'},edit?'Ubah '+iv.invoice_number:(dup?'Duplikat invoice':'Invoice baru')));
  if(edit&&st.paid>0)wrap.appendChild(h('div',{class:'note'},'Sudah ada pembayaran '+rp(st.paid)+'. Total baru tidak boleh lebih kecil dari itu.'));
@@ -61,9 +72,9 @@ async function vEdit(el,my){
    cn.addEventListener('input',()=>{x.name=cn.value;});cu.addEventListener('input',()=>{x.unit=cu.value;});cq.addEventListener('input',()=>{x.qty=ui.num(cq.value,true);totals();help();});
    list.appendChild(h('div',{class:'set-comp'},h('div',{class:'row'},h('b',null,'Isi '+(k+1)),h('button',{class:'linkbtn',type:'button',onclick:()=>{it.comps.splice(k,1);drawComps();totals();help();}},'Hapus')),
     ui.field('Nama',cn),h('div',{class:'grid2'},ui.field('Jumlah per set',cq),ui.field('Satuan',cu))));});}
-  const add=ui.select([['','+ Tambah isi dari katalog']].concat(prods.map(p=>[p.product_id,p.name+' · '+rp(p.sell_price)])),'',{'aria-label':'Tambah isi dari katalog'});
-  add.addEventListener('change',()=>{const p=prods.find(x=>x.product_id===add.value);add.value='';if(!p)return;
-   it.comps.push({product_id:p.product_id,name:p.name,qty:1,unit:p.unit||'pcs',unit_price:Number(p.sell_price)||0,cost_price:(p.cost_price===''||p.cost_price==null)?'':Number(p.cost_price)});drawComps();totals();help();});
+  const add=h('button',{type:'button',class:'btn pickbtn','aria-label':'Tambah isi dari katalog',id:'set-add'},'+ Tambah isi dari katalog');
+  add.addEventListener('click',()=>pickProduct(prods,p=>{
+   it.comps.push({product_id:p.product_id,name:p.name,qty:1,unit:p.unit||'pcs',unit_price:Number(p.sell_price)||0,cost_price:(p.cost_price===''||p.cost_price==null)?'':Number(p.cost_price)});drawComps();totals();help();},true));
   nm.addEventListener('input',()=>{it.name=nm.value;});q.addEventListener('input',()=>{it.qty=ui.num(q.value,true);totals();upLine();});
   c.appendChild(h('div',{class:'row'},h('b',null,'Set '+(n+1)),st.items.length>1?h('button',{class:'linkbtn',type:'button',onclick:()=>{st.items.splice(n,1);drawItems();totals();}},'Hapus'):null));
   c.appendChild(ui.field('Nama set',nm));c.appendChild(h('div',{class:'grid2'},ui.field('Jumlah set',q),ui.field('Harga per set (Rp)',pr)));
@@ -71,7 +82,7 @@ async function vEdit(el,my){
   c.appendChild(h('button',{class:'linkbtn',type:'button',onclick:()=>{it.comps.push({product_id:'',name:'',qty:1,unit:'pcs',unit_price:0,cost_price:''});drawComps();help();}},'+ Isi manual'));
   c.appendChild(helpBox);c.appendChild(h('div',{class:'row'},h('span',{class:'sub'},'Subtotal baris'),line));drawComps();help();upLine();return c;}
  function itemCard(it,n){if(it.set)return setCard(it,n);const c=h('div',{class:'card item-ed'});
-  const ps=ui.select([['','Item manual / ketik sendiri']].concat(prods.map(p=>[p.product_id,p.name+' · '+rp(p.sell_price)])),it.product_id,{'aria-label':'Pilih dari katalog'});
+  const psCur=()=>{const p=prods.find(x=>x.product_id===it.product_id);return p?p.name:'Item manual / ketik sendiri';},ps=h('button',{type:'button',class:'btn pickbtn','aria-label':'Pilih dari katalog',id:'it-pick'+n},psCur()+'  ▾');
   const nm=ui.text({value:it.name,placeholder:'Nama item','aria-label':'Nama item',maxlength:'200'}),ds=ui.text({value:it.description,placeholder:'Deskripsi (opsional)','aria-label':'Deskripsi item',maxlength:'500'});
   const q=ui.text({value:String(it.qty),inputmode:'decimal','aria-label':'Qty'}),un=ui.text({value:it.unit,'aria-label':'Satuan',maxlength:'20'});
   const pr=ui.money(it.unit_price,v=>{it.unit_price=v;totals();},{'aria-label':'Harga satuan'}),co=ui.money(it.cost_price===''?0:it.cost_price,null,{'aria-label':'Modal per satuan','placeholder':'kosong = belum diketahui'});
@@ -79,8 +90,8 @@ async function vEdit(el,my){
   co.addEventListener('input',()=>{it.cost_price=co.value.trim()===''?'':ui.num(co.value);totals();});
   const line=h('b',{class:'line'},'');
   const upLine=()=>{line.textContent=rp(Math.round(it.qty*it.unit_price));};
-  ps.addEventListener('change',()=>{const p=prods.find(x=>x.product_id===ps.value);it.product_id=ps.value;if(p){it.name=nm.value=p.name;it.description=ds.value=p.description||'';it.unit=un.value=p.unit||'pcs';pr.setNum(Number(p.sell_price)||0);it.unit_price=Number(p.sell_price)||0;
-    const k=p.cost_price===''||p.cost_price==null?'':Number(p.cost_price);it.cost_price=k;co.value=k===''?'':ui.fmt(k);}totals();upLine();});
+  ps.addEventListener('click',()=>pickProduct(prods,p=>{it.product_id=p.product_id;ps.textContent=psCur()+'  ▾';{it.name=nm.value=p.name;it.description=ds.value=p.description||'';it.unit=un.value=p.unit||'pcs';pr.setNum(Number(p.sell_price)||0);it.unit_price=Number(p.sell_price)||0;
+    const k=p.cost_price===''||p.cost_price==null?'':Number(p.cost_price);it.cost_price=k;co.value=k===''?'':ui.fmt(k);}totals();upLine();}));
   nm.addEventListener('input',()=>{it.name=nm.value;});ds.addEventListener('input',()=>{it.description=ds.value;});un.addEventListener('input',()=>{it.unit=un.value;});
   q.addEventListener('input',()=>{it.qty=ui.num(q.value,true);totals();upLine();});pr.addEventListener('input',upLine);
   c.appendChild(h('div',{class:'row'},h('b',null,'Item '+(n+1)),st.items.length>1?h('button',{class:'linkbtn',type:'button',onclick:()=>{st.items.splice(n,1);drawItems();totals();}},'Hapus'):null));
@@ -90,7 +101,7 @@ async function vEdit(el,my){
   c.appendChild(h('div',{class:'row'},h('span',{class:'sub'},'Subtotal baris'),line));upLine();return c;}
  function drawItems(){ibox.textContent='';st.items.forEach((it,n)=>ibox.appendChild(itemCard(it,n)));}
  wrap.appendChild(h('h2',{class:'sec'},'Item'));wrap.appendChild(ibox);drawItems();
- wrap.appendChild(h('div',{class:'grid2'},h('button',{class:'btn',type:'button',onclick:()=>{st.items.push(blankItem());drawItems();totals();}},'+ Tambah item'),h('button',{class:'btn',type:'button',onclick:()=>{const f=st.items[0];if(st.items.length===1&&f&&!f.set&&!f.name.trim()&&!f.product_id&&!f.unit_price&&!f.description)st.items[0]=blankSet();else st.items.push(blankSet());drawItems();totals();}},'+ Tambah Set')));
+ wrap.appendChild(h('div',{class:'grid2'},h('button',{class:'btn',type:'button',onclick:()=>{st.items.push(blankItem());drawItems();totals();}},'+ Tambah item'),h('button',{class:'btn',type:'button',onclick:()=>{const f=st.items[0];if(st.items.length===1&&f&&!f.set&&!f.name.trim()&&!f.product_id&&!f.unit_price&&!f.description)st.items[0]=blankSet(setNameNext(st.items.slice(1)));else st.items.push(blankSet(setNameNext(st.items)));drawItems();totals();}},'+ Tambah Set')));
  // --- biaya
  const dtSel=ui.select([['amount','Diskon (Rp)'],['percent','Diskon (%)']],st.dt,{'aria-label':'Jenis diskon'});
  const dvIn=st.dt==='percent'?ui.text({value:String(st.dv),inputmode:'decimal','aria-label':'Nilai diskon'}):ui.money(st.dv,null,{'aria-label':'Nilai diskon'});
@@ -118,16 +129,16 @@ async function vEdit(el,my){
   const r=(a,b,c)=>tot.appendChild(h('div',{class:'row'+(c?' grand':'')},h('span',null,a),h('b',null,b)));r('Subtotal',rp(t.subtotal));if(t.discount)r('Diskon','− '+rp(t.discount));if(t.tax)r('PPN '+st.tax+'%',rp(t.tax));if(st.ship)r('Ongkir',rp(st.ship));st.ex.forEach(l=>{if(exTot(l))r((l.name||'Biaya tambahan')+' ('+l.qty+' × '+rp(l.unit_price)+')',rp(exTot(l)));});r('Total',rp(t.grand_total),1);}
  drawEx();totals();
  // --- tanggal & teks
- const isn=h('input',{type:'date',value:st.issue,'aria-label':'Tanggal terbit'}),dud=h('input',{type:'date',value:st.due,'aria-label':'Jatuh tempo'}),dl=h('input',{type:'date',value:st.deadline,'aria-label':'Deadline produksi'});
- isn.addEventListener('input',()=>{st.issue=isn.value;});dud.addEventListener('input',()=>{st.due=dud.value;});dl.addEventListener('input',()=>{st.deadline=dl.value;});
+ const isn=h('input',{type:'date',value:st.issue,'aria-label':'Tanggal terbit'}),dl=h('input',{type:'date',value:st.deadline,'aria-label':'Deadline produksi'});
+ isn.addEventListener('input',()=>{st.issue=isn.value;st.due=isn.value;});dl.addEventListener('input',()=>{st.deadline=dl.value;});
  const nt=ui.area(st.notes,{'aria-label':'Catatan',maxlength:'1000'}),tm=ui.area(st.terms,{rows:'4','aria-label':'Syarat dan ketentuan',maxlength:'2000'});nt.addEventListener('input',()=>{st.notes=nt.value;});tm.addEventListener('input',()=>{st.terms=tm.value;});
- wrap.appendChild(h('h2',{class:'sec'},'Tanggal'));wrap.appendChild(h('div',{class:'card'},h('div',{class:'grid2'},ui.field('Tanggal terbit',isn),ui.field('Jatuh tempo',dud)),ui.field('Deadline produksi (opsional)',dl)));
+ wrap.appendChild(h('h2',{class:'sec'},'Tanggal'));wrap.appendChild(h('div',{class:'card'},ui.field('Tanggal terbit',isn),ui.field('Deadline produksi (opsional)',dl)));
  wrap.appendChild(h('h2',{class:'sec'},'Catatan & syarat'));wrap.appendChild(h('div',{class:'card'},ui.field('Catatan untuk pelanggan',nt),ui.field('Syarat & ketentuan',tm)));
  // --- simpan
  function payload(){const p={items:st.items.map(i=>({item_id:i.item_id,product_id:i.product_id,name:i.name.trim(),description:i.description,unit:i.set?'set':(i.unit||'pcs'),qty:i.qty,unit_price:i.unit_price,cost_price:i.set?setCostOf(i.comps):i.cost_price,components:i.set?i.comps.map(c=>({product_id:c.product_id,name:c.name.trim(),qty:c.qty,unit:c.unit||'pcs',unit_price:c.unit_price,cost_price:c.cost_price})):undefined})),
-   issue_date:st.issue,due_date:st.due,discount_type:st.dt,discount_value:st.dv,tax_rate:st.tax,shipping_fee:st.ship,extras:st.ex.map(l=>({name:l.name.trim(),qty:l.qty,unit_price:l.unit_price})),notes:st.notes,terms:st.terms,deadline_date:st.deadline};
+   issue_date:st.issue,due_date:st.issue,discount_type:st.dt,discount_value:st.dv,tax_rate:st.tax,shipping_fee:st.ship,extras:st.ex.map(l=>({name:l.name.trim(),qty:l.qty,unit_price:l.unit_price})),notes:st.notes,terms:st.terms,deadline_date:st.deadline};
   if(st.customer_id){p.customer_id=st.customer_id;if(st.refreshCust)p.refresh_customer=true;}else if(st.manual)Object.assign(p,st.manual);return p;}
- function check(){if(!st.customer_id&&!st.manual)return'Pilih pelanggan terlebih dahulu.';if(!st.issue||!st.due)return'Tanggal terbit dan jatuh tempo wajib diisi.';if(st.due<st.issue)return'Jatuh tempo tidak boleh sebelum tanggal terbit.';
+ function check(){if(!st.customer_id&&!st.manual)return'Pilih pelanggan terlebih dahulu.';if(!st.issue)return'Tanggal terbit wajib diisi.';
   for(let i=0;i<st.items.length;i++){const it=st.items[i];if(!it.name.trim())return'Nama item '+(i+1)+' wajib diisi.';if(it.set){if(!it.comps.length)return'Set '+(i+1)+' harus punya minimal 1 isi.';for(const c of it.comps){if(!c.name.trim())return'Nama isi pada set '+(i+1)+' wajib diisi.';if(!(c.qty>0))return'Jumlah isi pada set '+(i+1)+' harus lebih dari 0.';}}if(!(it.qty>0))return'Qty item '+(i+1)+' harus lebih dari 0.';}
   for(let i=0;i<st.ex.length;i++){const l=st.ex[i];if(!l.name.trim())return'Nama biaya tambahan '+(i+1)+' wajib diisi.';if(!(l.qty>0))return'Jumlah biaya tambahan '+(i+1)+' harus lebih dari 0.';}
   if(edit&&st.t.grand_total<st.paid)return'Total baru ('+rp(st.t.grand_total)+') lebih kecil dari pembayaran yang sudah tercatat ('+rp(st.paid)+').';return'';}
@@ -135,7 +146,7 @@ async function vEdit(el,my){
   await ui.run(btn,async()=>{let v;
    if(!edit){p.state=kind==='draft'?'Draft':'Issued';v=await api('invoices.create',p);}
    else{p.invoice_id=id;p.ver=st.ver;if(kind==='issue')p.issue=true;v=await api('invoices.save',p);}
-   A.toast(kind==='draft'?'Draf disimpan':(edit&&kind==='save'?'Perubahan disimpan':'Invoice diterbitkan'));location.hash='#/invoice?id='+encodeURIComponent(v.invoice.invoice_id);},m=>ui.banner(errBox,m));}
+   A.toast(kind==='draft'?'Draf disimpan':(edit&&kind==='save'?'Perubahan disimpan':'Invoice diterbitkan'));if(v&&v.invoice&&v.items){A.putDetail(v.invoice.invoice_id,v);A.listUpsert(v);}location.hash='#/invoice?id='+encodeURIComponent(v.invoice.invoice_id);},m=>ui.banner(errBox,m));}
  const bar=h('div',{class:'btnrow stick'});
  if(!edit||st.state==='Draft'){bar.appendChild(h('button',{class:'btn',type:'button',id:'b-draft',onclick:e=>save('draft',e.currentTarget)},'Simpan Draft'));bar.appendChild(h('button',{class:'btn pri',type:'button',id:'b-issue',onclick:e=>save('issue',e.currentTarget)},'Terbitkan'));}
  else bar.appendChild(h('button',{class:'btn pri',type:'button',id:'b-save',onclick:e=>save('save',e.currentTarget)},'Simpan Perubahan'));
@@ -162,7 +173,7 @@ function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='o
   cs.length?h('div',{class:'set-isi'},h('div',{class:'sub'},'Isi 1 set'),...cs.map(c=>h('div',{class:'row set-c'},h('span',null,c.name),h('span',{class:'sub'},String(Math.round(Number(c.qty)*1000)/1000).replace('.',',')+' '+(c.unit||'pcs'))))):null));});
  const tt=h('div',{class:'card totals'});const r=(a,b,c)=>tt.appendChild(h('div',{class:'row'+(c?' grand':'')},h('span',null,a),h('b',null,b)));
  r('Subtotal',rp(t.subtotal));if(t.discount)r('Diskon'+(iv.discount_type==='percent'?' '+iv.discount_value+'%':''),'− '+rp(t.discount));if(t.tax)r('PPN '+iv.tax_rate+'%',rp(t.tax));if(Number(iv.shipping_fee))r('Ongkir',rp(iv.shipping_fee));A.extrasOf(iv).forEach(l=>{if(exTot(l))r(l.name+(l.qty!==1?' ('+l.qty+' × '+rp(l.unit_price)+')':''),rp(exTot(l)));});r('Total',rp(t.grand_total),1);el.appendChild(tt);
- el.appendChild(h('p',{class:'sub dates',id:'d-dates'},'Terbit '+fdate(iv.issue_date)+' · Jatuh tempo '+fdate(iv.due_date)));
+ el.appendChild(h('p',{class:'sub dates',id:'d-dates'},'Terbit '+fdate(iv.issue_date)));
  // tombol aksi
  const bar=h('div',{class:'acts'});
  const add=(txt,cls,fn,id)=>bar.appendChild(h('button',{class:'btn '+(cls||''),type:'button',id:id,onclick:fn},txt));
@@ -203,27 +214,31 @@ function orderCard(v,reload,errBox){const iv=v.invoice,o=v.order,can=iv.state===
  card.appendChild(h('div',{class:'row'},h('div',{class:'sub'},'Status pesanan'),A.ostPill(o.fulfillment_status,v.payment_status,'d-order')));
  const dl=h('div',{class:'row',style:'margin-top:6px'},h('span',{class:'sub',id:'d-deadline'},'Deadline: '+(o.deadline_date?fdate(o.deadline_date):'belum diatur')),can?h('button',{class:'linkbtn',type:'button',id:'o-dl',onclick:()=>dlForm(v,reload)},o.deadline_date?'Ubah':'Atur'):null);card.appendChild(dl);
  if(ship)card.appendChild(h('div',{class:'row'},h('span',{class:'sub',id:'d-shipdate'},'Dikirim: '+fdate(ship.ship_date)),can?h('button',{class:'linkbtn',type:'button',id:'o-sd',onclick:()=>shipForm({invoice_id:iv.invoice_id,ver:ordVer(o),ship_date:ship.ship_date},reload)},'Ubah'):null));
- if(can){card.appendChild(h('div',{class:'chips ordchips',role:'group','aria-label':'Ubah status pesanan'},...ORD_ST.map(st=>h('button',{class:'chip '+A.OST[st][1],type:'button','data-st':st,'aria-pressed':String(o.fulfillment_status===st),onclick:()=>setStatus({invoice_id:iv.invoice_id,ver:ordVer(o),cur:o.fulfillment_status,balance:v.balance},st,reload,m=>ui.banner(errBox,m))},A.OST[st][0]))));
+ if(can){card.appendChild(h('div',{class:'chips ordchips',role:'group','aria-label':'Ubah status pesanan'},...ORD_ST.map(st=>h('button',{class:'chip '+A.OST[st][1],type:'button','data-st':st,'aria-pressed':String(o.fulfillment_status===st),onclick:e=>{const box=e.currentTarget.parentNode,prev=o.fulfillment_status,mark=x=>box.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.st===x)));
+   setStatus({invoice_id:iv.invoice_id,get ver(){return ordVer(o);},cur:prev,balance:v.balance,afterDone:true,opt:x=>{o.fulfillment_status=x;mark(x);},ok:(n,r)=>{if(r&&r.order)Object.assign(o,r.order);},undo:()=>{o.fulfillment_status=prev;mark(prev);}},st,reload,m=>ui.banner(errBox,m));}},A.OST[st][0]))));
   card.appendChild(h('div',{class:'sub'},'Status bisa dimajukan atau dikembalikan bila salah ketuk. Selesai otomatis saat pesanan Dikirim dan invoice sudah lunas.'));}
  else card.appendChild(h('div',{class:'sub'},'Status tidak bisa diubah karena invoice belum terbit atau sudah dibatalkan.'));
  return card;}
 function dlForm(v,reload){const iv=v.invoice,o=v.order;ui.sheet('Deadline pesanan',(b,close)=>{const dt=h('input',{type:'date',value:o.deadline_date||'','aria-label':'Deadline',id:'o-dlin'});b.appendChild(ui.field('Deadline selesai',dt));
  const go=h('button',{class:'btn pri',type:'button',id:'o-dlsave'},'Simpan');go.addEventListener('click',()=>ui.run(go,async()=>{await api('orders.update',{invoice_id:iv.invoice_id,ver:ordVer(o),deadline_date:dt.value});close();A.toast('Deadline disimpan');await reload();},m=>ui.banner(b,m)));
  b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',onclick:close},'Batal'),go));});}
-let ordBusy=false;
-async function setStatus(info,st,done,fail){if(ordBusy||info.cur===st)return;
+// Antrean per invoice: ketukan beruntun langsung tampil di layar, server menyusul berurutan (versi data selalu terbaru).
+const QU={},QN={};
+function enqueue(id,fn){QN[id]=(QN[id]||0)+1;const q=(QU[id]||Promise.resolve()).then(fn,fn);QU[id]=q.catch(()=>{});QU[id].then(()=>{QN[id]--;});return q;}
+async function setStatus(info,st,done,fail){if(info.cur===st)return;
  if(st==='Shipped'){shipForm(Object.assign({fromStatus:true},info),done,fail);return;}
- ordBusy=true;if(info.opt){// tampilan berubah seketika; server menyusul di latar belakang
-  info.opt(st);try{const r=await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});if(info.ok)info.ok(r&&r.order?ordVer(r.order):null);A.toast('Status: '+((A.OST[st]||[st])[0]).replace(/^\u2713 /,''));}catch(e){if(info.undo)info.undo();if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}return;}
- try{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});A.toast('Status: '+((A.OST[st]||[st])[0]).replace(/^\u2713 /,''));await done();}catch(e){if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}}
+ if(info.opt)info.opt(st);// tampilan berubah seketika
+ await enqueue(info.invoice_id,async()=>{try{const r=await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});if(info.ok)info.ok(r&&r.order?ordVer(r.order):null,r);A.toast('Status: '+((A.OST[st]||[st])[0]).replace(/^\u2713 /,''));
+   if((!info.opt||info.afterDone)&&QN[info.invoice_id]<=1&&done)await done();}
+  catch(e){if(info.undo)info.undo();if(fail)fail(e.message);else A.toast(e.message);}});}
 function shipForm(info,reload,fail){ui.sheet('Tanggal kirim',(b,close)=>{const dt=h('input',{type:'date',value:info.ship_date||ui.today(),'aria-label':'Tanggal kirim',id:'o-sdin'});b.appendChild(ui.field('Tanggal kirim',dt));
  const go=h('button',{class:'btn pri',type:'button',id:'o-sdsave'},info.fromStatus?'Tandai Dikirim':'Simpan');go.addEventListener('click',()=>ui.run(go,async()=>{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:'Shipped',ship_date:dt.value});close();A.toast('Status: Dikirim');await reload();},m=>ui.banner(b,m)));
  b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',onclick:close},'Batal'),go));});}
-A.setOrderStatus=setStatus;A.ORD_ST=ORD_ST;
+A.pending=()=>Object.keys(QN).some(k=>QN[k]>0);A.setOrderStatus=setStatus;A.ORD_ST=ORD_ST;
 // Swipe kanan di Home: Lunas 1 ketuk (pilih rekening) atau bayar sebagian. info: {invoice_id,balance,paid,opt,ok,undo}
 A.quickPay=function(info){if(!(info.balance>0))return;ui.sheet('Lunas '+rp(info.balance),(b,close)=>{b.appendChild(h('p',{class:'sub'},'Pilih rekening penerima. Sisa tagihan dicatat lunas hari ini.'));
- const row=h('div',{class:'btnrow',id:'qp-methods'});METHODS.forEach(m=>{row.appendChild(h('button',{class:'btn pri',type:'button','data-m':m,onclick:async()=>{if(ordBusy)return;ordBusy=true;close();info.opt();
-  try{await api('payments.add',{invoice_id:info.invoice_id,amount:info.balance,method:m,payment_date:ui.today()});info.ok();A.toast('Lunas dicatat ('+m+')');}catch(e){info.undo();A.toast(e.message);}finally{ordBusy=false;}}},m));});
+ const row=h('div',{class:'btnrow',id:'qp-methods'});METHODS.forEach(m=>{row.appendChild(h('button',{class:'btn pri',type:'button','data-m':m,onclick:()=>{close();info.opt();enqueue(info.invoice_id,async()=>{
+  try{await api('payments.add',{invoice_id:info.invoice_id,amount:info.balance,method:m,payment_date:ui.today()});info.ok();A.toast('Lunas dicatat ('+m+')');}catch(e){info.undo();A.toast(e.message);}});}},m));});
  b.appendChild(row);b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',onclick:close},'Batal')));});};
 A.payPartial=function(info,reload){payForm({invoice:{invoice_id:info.invoice_id},balance:info.balance,paid:info.paid||0},reload);};
 function payForm(v,reload){const iv=v.invoice;ui.sheet('Catat pembayaran',(b,close)=>{const err=h('div');b.appendChild(err);

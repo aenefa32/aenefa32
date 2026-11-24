@@ -1,7 +1,7 @@
 /* AeneFlow - settings.js: profil usaha, rekening bank (maks 5), jatuh tempo & PPN default, syarat, template WhatsApp. Hanya pemilik yang bisa menyimpan. */
 (window.AeneModules=window.AeneModules||[]).push(function(A){'use strict';
 const h=A.h,ui=A.ui,S=A.S,api=A.api;
-const DEF_WA='Halo {nama}, berikut invoice {nomor} dari {bisnis}. Total {total}, sisa tagihan {sisa}, jatuh tempo {jatuh_tempo}. Terima kasih 🙏';
+const DEF_WA='Halo {nama}, berikut invoice {nomor} dari {bisnis}. Total {total}, sisa tagihan {sisa}. Terima kasih 🙏';
 A.waDefault=DEF_WA;
 function banks(s){try{const a=JSON.parse(s.bank_accounts||'[]');return Array.isArray(a)?a:[];}catch(e){return[];}}
 // ---- logo usaha: dikecilkan DI PERANGKAT (canvas) sampai <= 40.000 karakter (batas backend 45.000), PNG dulu, lalu JPEG berlatar putih ----
@@ -60,11 +60,18 @@ async function vSettings(el){
  el.appendChild(h('h2',{class:'sec'},'Logo usaha'));el.appendChild(h('div',{class:'card'},lbox,lmsg));
  el.appendChild(h('h2',{class:'sec'},'Rekening bank'));el.appendChild(bbox);
  el.appendChild(h('h2',{class:'sec'},'Biaya tambahan'));el.appendChild(h('p',{class:'sub'},'Katalog biaya (packaging, kartu, dll). Di Editor Invoice tinggal pilih dari menu lalu isi jumlahnya.'));el.appendChild(xbox);
- el.appendChild(h('h2',{class:'sec'},'Aturan invoice'));el.appendChild(h('div',{class:'card'},h('div',{class:'grid2'},ui.field('Jatuh tempo (hari)',f.default_due_days),ui.field('PPN default (%)',f.tax_default_rate)),ui.field('Syarat & ketentuan default',f.terms_and_conditions)));
- el.appendChild(h('h2',{class:'sec'},'Template WhatsApp'));el.appendChild(h('div',{class:'card'},ui.field('Pesan',f.wa_template,'Kata kunci: {nama} {nomor} {total} {sisa} {jatuh_tempo} {bisnis}. PDF dibuat lewat tombol "PDF & WhatsApp" di detail invoice.')));
+ el.appendChild(h('h2',{class:'sec'},'Aturan invoice'));el.appendChild(h('div',{class:'card'},h('div',{class:'grid2'},ui.field('PPN default (%)',f.tax_default_rate)),ui.field('Syarat & ketentuan default',f.terms_and_conditions)));
+ el.appendChild(h('h2',{class:'sec'},'Template WhatsApp'));el.appendChild(h('div',{class:'card'},ui.field('Pesan',f.wa_template,'Kata kunci: {nama} {nomor} {total} {sisa} {bisnis}. PDF dibuat lewat tombol "PDF & WhatsApp" di detail invoice.')));
+ const sig=ui.text({value:s.signature_name||'',placeholder:'Kosong = kata pertama nama usaha','aria-label':'Nama penutup PDF',maxlength:'60',id:'s-sig'});
+ el.appendChild(h('h2',{class:'sec'},'Penutup PDF invoice'));el.appendChild(h('div',{class:'card'},ui.field('Nama di bawah "Hormat kami,"',sig)));
+ const cal=h('input',{type:'checkbox',id:'s-cal','aria-label':'Masukkan deadline ke Google Kalender otomatis'});cal.checked=String(s.calendar_auto)!=='false';const calMsg=h('div');
+ const calAll=h('button',{class:'btn',type:'button',id:'s-calall'},'Masukkan semua deadline yang ada ke Kalender');
+ calAll.addEventListener('click',()=>ui.run(calAll,async()=>{const r=await api('calendar.sync_all');if(r&&r.status==='no_permission'){ui.banner(calMsg,r.message);return;}ui.banner(calMsg,'');A.toast('Kalender diperbarui: '+(r.created||0)+' baru, '+(r.updated||0)+' diperbarui');},m=>ui.banner(calMsg,m)));
+ el.appendChild(h('h2',{class:'sec'},'Google Kalender'));el.appendChild(h('div',{class:'card'},h('label',{class:'check',style:'display:flex;gap:10px;align-items:center;min-height:44px'},cal,h('span',null,'Masukkan deadline produksi otomatis ke Google Kalender')),h('div',{class:'sub'},'Acara sehari penuh dibuat saat invoice diterbitkan dengan deadline, ikut berpindah bila deadline diubah, dan hilang bila pesanan dikirim atau invoice dibatalkan.'),calAll,calMsg));
  const go=h('button',{class:'btn pri',type:'button',id:'s-save'},'Simpan Pengaturan');
  go.addEventListener('click',()=>{const clean=bk.filter(b=>b.bank.trim()||b.number.trim()||b.holder.trim());
-  const p={business_name:f.business_name.value.trim(),business_address:f.business_address.value.trim(),business_phone:f.business_phone.value.trim(),business_email:f.business_email.value.trim(),business_instagram:f.business_instagram.value.trim().replace(/^@+/,''),default_due_days:ui.num(f.default_due_days.value),tax_default_rate:ui.num(f.tax_default_rate.value,true),terms_and_conditions:f.terms_and_conditions.value.trim(),wa_template:f.wa_template.value.trim()||DEF_WA,bank_accounts:clean.map(b=>({bank:b.bank.trim(),number:b.number.trim(),holder:b.holder.trim()}))};
+  const p={business_name:f.business_name.value.trim(),business_address:f.business_address.value.trim(),business_phone:f.business_phone.value.trim(),business_email:f.business_email.value.trim(),business_instagram:f.business_instagram.value.trim().replace(/^@+/,''),tax_default_rate:ui.num(f.tax_default_rate.value,true),terms_and_conditions:f.terms_and_conditions.value.trim(),wa_template:f.wa_template.value.trim()||DEF_WA,bank_accounts:clean.map(b=>({bank:b.bank.trim(),number:b.number.trim(),holder:b.holder.trim()}))};
+  p.signature_name=sig.value.trim();p.calendar_auto=cal.checked?'true':'false';
   p.extra_catalog=xc.filter(c=>c.name.trim()).map(c=>({name:c.name.trim(),price:c.price||0}));
   if(logoDirty)p.business_logo=logo;
   if(!p.business_name){ui.banner(errBox,'Nama usaha wajib diisi.');return;}

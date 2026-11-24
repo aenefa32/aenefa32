@@ -31,7 +31,7 @@ function dropCaches(){ls.del(BOOT_KEY);ls.del(INV_KEY);}// data bisnis di perang
 function jwtExp(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000;}catch(e){return 0;}}
 function onCred(r){S.token=r.credential;S.exp=jwtExp(S.token);if(tok){clearTimeout(tok.t);const t=tok;tok=null;t.res();}else enter();}
 function ensureFresh(){if(freshP)return freshP;freshP=new Promise((res,rej)=>{tok={res:res,rej:rej,t:setTimeout(()=>{tok=null;logout('Sesi berakhir. Silakan masuk lagi.');rej(new Error('Sesi berakhir'));},9000)};try{google.accounts.id.prompt();}catch(e){}}).then(()=>{freshP=null;},e=>{freshP=null;throw e;});return freshP;}
-const NOREQ=/(list|get|preview|fields|report|batches|bootstrap|ping)$/;
+const NOREQ=/(list|get|preview|fields|report|batches|bootstrap|ping|sync|sync_all)$/;
 // Cache baca singkat untuk daftar pilihan (pelanggan/produk): tampil instan, diperbarui di latar belakang untuk pemakaian berikutnya
 // RG: generasi cache; hasil yang dimulai sebelum penulisan tidak boleh mengisi ulang cache dengan data lama
 let RC={},DC={},RG=0,lastPF=0;const RC_OK=/^(customers|products)\.list$/;// DC: detail invoice di memori saja (tidak pernah ditulis ke penyimpanan perangkat)
@@ -41,14 +41,24 @@ function api(action,params){
   if(h&&Date.now()-h.t<300000){apiRaw(action,params).then(d=>{if(g===RG)RC[k]={t:Date.now(),d:d};}).catch(()=>{});return Promise.resolve(h.d);}
   return apiRaw(action,params).then(d=>{if(g===RG)RC[k]={t:Date.now(),d:d};return d;});}
  if(action==='invoices.get'&&params&&params.invoice_id){const id=params.invoice_id,g=RG;return apiRaw(action,params).then(d=>{if(g===RG)DC[id]={t:Date.now(),d:d};return d;});}
- return apiRaw(action,params);}
+ return apiRaw(action,params).then(r=>{if(CAL_ACT.test(action))calHook(action,params,r);return r;});}
+// Kalender: setelah invoice/pesanan berubah, deadline disinkronkan ke Google Kalender di LATAR BELAKANG (tidak menahan layar).
+const CAL_ACT=/^(invoices\.(create|save|issue|cancel|delete_draft|delete)|orders\.update)$/;let calWarned=false;
+function calHook(action,params,r){try{const st=S.boot&&S.boot.settings;if(st&&String(st.calendar_auto)==='false')return;params=params||{};
+ const id=params.invoice_id||(r&&r.invoice&&r.invoice.invoice_id);if(!id)return;
+ if(action==='invoices.create'&&!params.deadline_date)return;if(action==='orders.update'&&params.deadline_date===undefined&&params.status===undefined)return;
+ apiRaw('calendar.sync',{invoice_id:id}).then(x=>{if(!x)return;if(x.status==='created')toast('Deadline masuk Google Kalender');else if(x.status==='no_permission'&&!calWarned){calWarned=true;toast('Izin Google Kalender belum aktif. Lihat Pengaturan.');}}).catch(()=>{});}catch(e){}}
+// Setelah invoice dibuat/diubah: baris barunya langsung masuk ke daftar Home yang tersimpan, jadi Home & rekap langsung benar tanpa menunggu server (lalu tetap diperbarui di latar belakang)
+function listUpsert(v){try{const inv=v.invoice,o=v.order||{},row={invoice_id:inv.invoice_id,invoice_number:inv.invoice_number,customer_id:inv.customer_id,cust_name:inv.cust_name,issue_date:inv.issue_date,due_date:inv.due_date,state:inv.state,grand_total:v.totals.grand_total,paid:v.paid,balance:v.balance,payment_status:v.payment_status,fulfillment_status:o.fulfillment_status||'',deadline_date:o.deadline_date||'',order_ver:o.order_id?String(o.updated_at||o.created_at||''):''};
+ const base=S.cache.inv||lsJson(INV_KEY);if(!Array.isArray(base))return;const i=base.findIndex(x=>x.invoice_id===row.invoice_id);if(i>=0)base[i]=row;else base.push(row);S.cache.inv=base;ls.set(INV_KEY,JSON.stringify(base));}catch(e){}}
+function putDetail(id,d){DC[id]={t:Date.now(),d:d};}// hasil tulis (create/save) sudah berisi detail lengkap: halaman detail tampil tanpa menunggu permintaan kedua
 function peekDetail(id){const h=DC[id];return h&&Date.now()-h.t<600000?h.d:null;}// detail yang sudah dimuat di latar belakang: tampil instan, lalu selalu diperbarui dari server
 function prefetchInv(rows){if(Date.now()-lastPF<180000||!rows||!rows.length)return;lastPF=Date.now();const ids=rows.filter(x=>x.state!=='Cancelled').slice(0,6).map(x=>x.invoice_id);let i=0;
  const next=()=>{if(i>=ids.length||document.hidden)return;const id=ids[i++];if(DC[id]&&Date.now()-DC[id].t<120000){next();return;}api('invoices.get',{invoice_id:id}).catch(()=>{}).then(()=>setTimeout(next,350));};setTimeout(next,1500);}
 async function apiRaw(action,params){
  if(!S.sess&&(!S.token||S.exp-60000<Date.now()))await ensureFresh();
  let res,j;
- if(!NOREQ.test(action)){S.cache={};RC={};DC={};RG++;S.invStale=true;}// setelah tulis: salinan di perangkat tetap dipakai sebagai tampilan sementara, lalu langsung diperbarui dari server
+ if(!NOREQ.test(action)){S.cache={};if(/^(customers|products|settings|import)\./.test(action)||action==='bootstrap')RC={};DC={};RG++;S.invStale=true;}/* daftar pelanggan/produk hanya dibuang bila memang berubah */// setelah tulis: salinan di perangkat tetap dipakai sebagai tampilan sementara, lalu langsung diperbarui dari server
  try{res=await fetch(C.apiUrl,{method:'POST',body:JSON.stringify(Object.assign(S.sess?{session:S.sess}:{idToken:S.token},{action:action,params:params||{},request_id:NOREQ.test(action)?undefined:uuid()}))});}
  catch(e){throw new Error('Tidak bisa menghubungi server. Periksa koneksi internet.');}
  try{j=await res.json();}catch(e){throw new Error('Respons server tidak valid.');}
@@ -118,7 +128,7 @@ function rowCard(x){const ps=payStatus(x.payment_status,x.grand_total,x.balance)
 function rowEl(x){const card=rowCard(x);if(!(x.state==='Issued'&&x.fulfillment_status&&x.order_ver&&A.setOrderStatus&&A.ORD_ST))return card;
  const info=()=>{const prev=x.fulfillment_status,list=S.cache.inv;// api() membuang cache setelah tulis; salinan ini dipulihkan agar tampilan tidak berkedip
   const keep=()=>{if(list){S.cache.inv=list;ls.set(INV_KEY,JSON.stringify(list));}};
-  return {invoice_id:x.invoice_id,ver:x.order_ver,cur:prev,balance:x.balance,
+  return {invoice_id:x.invoice_id,get ver(){return x.order_ver;},cur:prev,balance:x.balance,
   opt:st=>{x.fulfillment_status=st;S.invStale=false;S.openSw=null;keep();render();},
   ok:v=>{if(v)x.order_ver=v;keep();},
   undo:()=>{x.fulfillment_status=prev;keep();S.invStale=true;render();}};};
@@ -165,7 +175,7 @@ async function vHome(el,my){
   rows.slice(0,300).forEach(x=>list.appendChild(rowEl(x)));
   if(rows.length>300)list.appendChild(h('p',{class:'sub'},'Menampilkan 300 pertama dari '+rows.length+'. Gunakan pencarian untuk mempersempit.'));}
  drawSum();paint();if(!stale)prefetchInv(all);
- if(stale)api('invoices.list').then(n=>{S.cache.inv=n;ls.set(INV_KEY,JSON.stringify(n));if(my!==S.seq)return;S.invStale=false;all=n;note.remove();drawSum();paint();prefetchInv(n);}).catch(()=>{if(my===S.seq)note.textContent='Tidak bisa memperbarui. Menampilkan data tersimpan.';});
+ if(stale)api('invoices.list').then(n=>{if(A.pending&&A.pending()){S.invStale=true;return;}/* masih ada perubahan menunggu server: jangan timpa tampilan terbaru dengan data lama */S.cache.inv=n;ls.set(INV_KEY,JSON.stringify(n));if(my!==S.seq)return;S.invStale=false;all=n;note.remove();drawSum();paint();prefetchInv(n);}).catch(()=>{if(my===S.seq)note.textContent='Tidak bisa memperbarui. Menampilkan data tersimpan.';});
  const f=h('button',{class:'fab',type:'button','aria-label':'Buat invoice baru',onclick:()=>{location.hash='#/invoice-edit';}},'+');document.body.appendChild(f);}
 async function vMore(el,my){const b=S.boot,s=b.settings||{};
  el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',{class:'mark','aria-hidden':'true',style:'width:56px;height:56px;font-size:22px'},initials(s.business_name)),h('div',{style:'flex:1;min-width:0'},h('div',{style:'font:700 22px var(--serif)'},s.business_name||'AeneFlow'),h('div',{class:'sub'},b.user.email+' · '+b.user.role)))));
@@ -186,7 +196,7 @@ async function vImport(el){if(S.boot.user.role!=='owner')return el.appendChild(e
  if(!window.AeneImport)return el.appendChild(h('div',{class:'banner',role:'alert'},'Modul impor tidak termuat.'));window.AeneImport.mount(el,{api:api});}
 window.AeneApp={api:api,logout:logout,logoutAll:logoutAll};
 function compsOf(i){if(!i||!i.components_json)return[];try{const a=JSON.parse(i.components_json);return Array.isArray(a)?a:[];}catch(e){return[];}}// isi set dari baris invoice (Versi 18)
-const A={compsOf:compsOf,peekDetail:peekDetail,payStatus:payStatus,PILL:PILL,eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
+const A={compsOf:compsOf,peekDetail:peekDetail,putDetail:putDetail,listUpsert:listUpsert,payStatus:payStatus,PILL:PILL,eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
 (window.AeneModules||[]).forEach(f=>{try{f(A);}catch(e){console.error('Modul gagal dimuat',e);}});
 
 // ---------- mulai ----------
