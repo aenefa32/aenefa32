@@ -37,17 +37,19 @@ async function build(v,s){
  // logo usaha (opsional): gagal dibaca = diabaikan, PDF tetap jadi tanpa logo
  let logo=null,lw=0,lh=0;const lm=/^data:image\/(png|jpeg);base64,([A-Za-z0-9+\/]+={0,2})$/.exec(s.business_logo||'');
  if(lm){try{const bin=Uint8Array.from(atob(lm[2]),c=>c.charCodeAt(0));logo=lm[1]==='png'?await doc.embedPng(bin):await doc.embedJpg(bin);const sc=Math.min(64/logo.width,64/logo.height);lw=logo.width*sc;lh=logo.height*sc;}catch(e){logo=null;lw=lh=0;}}
- const tl=M+(logo?lw+14:0),rowH=logo?lh:26,cy=y-rowH/2;if(logo)page.drawImage(logo,{x:M,y:y-lh,width:lw,height:lh});
- // satu baris sejajar secara vertikal: logo - nama usaha - INVOICE (titik tengah sama)
- const nmTxt=clean(s.business_name||'Invoice');let nSz=20;while(nSz>11&&B.widthOfTextAtSize(nmTxt,nSz)>R-tl-130)nSz-=1;
- tx(nmTxt,tl,cy-nSz*.35,nSz,B,rose);tx('INVOICE',R,cy-22*.35,22,B,ink,true);
- let ly=y-rowH-14;
- [].concat(wrap(F,9,s.business_address||'',300),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_email||'',s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):'']).forEach(l=>{if(l){tx(l,M,ly,9,F,mute);ly-=12;}});
- let ry=y-rowH-14;tx(iv.invoice_number,R,ry,11,B,rose,true);ry-=15;
+ const tl=M+(logo?lw+14:0),nmTxt=clean(s.business_name||'Invoice');let nSz=20;while(nSz>11&&B.widthOfTextAtSize(nmTxt,nSz)>R-tl-130)nSz-=1;
+ // blok teks (nama usaha + alamat/kontak) di kanan logo; logo diposisikan TEPAT DI TENGAH tinggi blok teks; INVOICE sebaris dengan nama usaha
+ const info=[].concat(wrap(F,9,s.business_address||'',R-tl-150),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_email||'',s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):'']).filter(Boolean);
+ const textH=nSz+6+info.length*12,rowH=Math.max(logo?lh:0,textH),tTop=y-(rowH-textH)/2;
+ if(logo)page.drawImage(logo,{x:M,y:y-(rowH-lh)/2-lh,width:lw,height:lh});
+ let ly=tTop-nSz*.85;tx(nmTxt,tl,ly,nSz,B,rose);tx('INVOICE',R,ly,22,B,ink,true);
+ ly-=17;info.forEach(l=>{tx(l,tl,ly,9,F,mute);ly-=12;});
+ let ry=tTop-nSz*.85-17;tx(iv.invoice_number,R,ry,11,B,rose,true);ry-=15;
  const st=STATUS[A.payStatus(v.payment_status,v.totals.grand_total,v.balance)]||STATUS[iv.state]||'';if(st){tx(st,R,ry,9.5,B,v.payment_status==='Paid'?good:mute,true);ry-=13;}
- y=Math.min(ly,ry)-6;page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
+ y=Math.min(ly+12,y-rowH,ry)-4;
+page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
  // pelanggan & tanggal
- const top=y;tx('DITAGIHKAN KEPADA Yth.',M,y,8,B,mute);y-=14;tx(iv.cust_name,M,y,11.5,B,ink);y-=14;
+ const top=y;tx('DITAGIHKAN KEPADA',M,y,8,B,mute);y-=14;tx('Yth. '+iv.cust_name,M,y,11.5,B,ink);y-=14;
  if(iv.cust_org){tx(iv.cust_org,M,y,9.5,F,ink);y-=12;}
  wrap(F,9,iv.cust_address||'',250).forEach(l=>{if(l){tx(l,M,y,9,F,mute);y-=12;}});
  if(iv.cust_whatsapp){tx('WA '+waShow(iv.cust_whatsapp),M,y,9,F,mute);y-=12;}
@@ -84,7 +86,7 @@ async function build(v,s){
  {const sig=String(s.signature_name||String(s.business_name||'').split(/\s+/)[0]||'').trim();need(56);tx('Hormat kami,',M,y,9.5,F,ink);y-=32;if(sig)tx(sig,M,y,10,B,ink);y-=20;}
  // catatan & syarat
  const para=(label,txt)=>{if(!String(txt||'').trim())return;const ls=wrap(F,8.5,txt,CW);need(22);tx(label,M,y,8,B,mute);y-=13;ls.forEach(l=>{need(12);tx(l,M,y,8.5,F,ink);y-=11;});y-=8;};
- para('CATATAN',iv.notes);para('SYARAT & KETENTUAN',iv.terms);
+ // Catatan & Syarat/Ketentuan tidak dicetak di PDF pelanggan (permintaan pemilik)
  // footer tiap halaman
  const pages=doc.getPages();pages.forEach((pg,k)=>{const pn=(k+1)+'/'+pages.length;pg.drawText(pn,{x:R-F.widthOfTextAtSize(pn,8),y:26,size:8,font:F,color:mute});});
  return doc.save();}
