@@ -48,12 +48,14 @@ if(typeof document==='undefined')return;
 function el(tag,props){const e=document.createElement(tag);props=props||{};Object.keys(props).forEach(k=>{if(k==='class')e.className=props[k];else if(k.slice(0,2)==='on')e.addEventListener(k.slice(2),props[k]);else if(k==='value')e.value=props[k];else if(props[k]!==false&&props[k]!==null&&props[k]!==undefined)e.setAttribute(k,props[k]);});
  for(let i=2;i<arguments.length;i++){const c=arguments[i];if(c===null||c===undefined||c===false)continue;e.appendChild(typeof c==='string'||typeof c==='number'?document.createTextNode(String(c)):c);}return e;}
 function download(name,text){const a=el('a',{href:URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'})),download:name});document.body.appendChild(a);a.click();a.remove();}
+// SheetJS (pihak ketiga, CDN) hanya dimuat saat file Excel benar-benar dipilih di Impor Data, bukan di setiap pembukaan aplikasi (mengurangi permukaan serangan).
+function loadXlsx(){return root.XLSX?Promise.resolve():new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=()=>res();s.onerror=()=>rej(new Error('Pustaka Excel tidak bisa dimuat. Periksa internet atau simpan file sebagai CSV.'));document.head.appendChild(s);});}
 function readFile(file){return new Promise((res,rej)=>{const fr=new FileReader(),isX=/\.xlsx?$/i.test(file.name);
  fr.onerror=()=>rej(new Error('File tidak bisa dibaca'));
  fr.onload=()=>{try{if(isX){if(!root.XLSX)throw new Error('Pustaka Excel (SheetJS) belum dimuat. Simpan sebagai CSV, atau muat SheetJS.');
    const wb=root.XLSX.read(fr.result,{type:'array'});res({sheets:wb.SheetNames,get:n=>root.XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null})});}
   else res({sheets:['CSV'],get:()=>parseCsv(String(fr.result))});}catch(e){rej(e);}};
- if(isX)fr.readAsArrayBuffer(file);else fr.readAsText(file);});}
+ if(isX)loadXlsx().then(()=>fr.readAsArrayBuffer(file)).catch(rej);else fr.readAsText(file);});}
 
 function mount(host,cfg){const api=cfg.api,S={kind:'invoices',file:null,book:null,table:null,fields:null,meta:null,mapping:{},options:{date_order:'dmy',paid_without_detail:'none',fulfillment_default:'Completed',create_customers:true,include_mismatch:false,tolerance:0},preview:null,busy:'',err:'',report:null,history:null};
  const call=async(a,p)=>{S.err='';try{return await api(a,p||{});}catch(e){S.err=String(e.message||e);throw e;}};

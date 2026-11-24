@@ -32,17 +32,30 @@ function jwtExp(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').
 function onCred(r){S.token=r.credential;S.exp=jwtExp(S.token);if(tok){clearTimeout(tok.t);const t=tok;tok=null;t.res();}else enter();}
 function ensureFresh(){if(freshP)return freshP;freshP=new Promise((res,rej)=>{tok={res:res,rej:rej,t:setTimeout(()=>{tok=null;logout('Sesi berakhir. Silakan masuk lagi.');rej(new Error('Sesi berakhir'));},9000)};try{google.accounts.id.prompt();}catch(e){}}).then(()=>{freshP=null;},e=>{freshP=null;throw e;});return freshP;}
 const NOREQ=/(list|get|preview|fields|report|batches|bootstrap|ping)$/;
-async function api(action,params){
+// Cache baca singkat untuk daftar pilihan (pelanggan/produk): tampil instan, diperbarui di latar belakang untuk pemakaian berikutnya
+// RG: generasi cache; hasil yang dimulai sebelum penulisan tidak boleh mengisi ulang cache dengan data lama
+let RC={},DC={},RG=0,lastPF=0;const RC_OK=/^(customers|products)\.list$/;// DC: detail invoice di memori saja (tidak pernah ditulis ke penyimpanan perangkat)
+function api(action,params){
+ if(RC_OK.test(action)){const k=action+JSON.stringify(params||{}),h=RC[k];
+  const g=RG;
+  if(h&&Date.now()-h.t<300000){apiRaw(action,params).then(d=>{if(g===RG)RC[k]={t:Date.now(),d:d};}).catch(()=>{});return Promise.resolve(h.d);}
+  return apiRaw(action,params).then(d=>{if(g===RG)RC[k]={t:Date.now(),d:d};return d;});}
+ if(action==='invoices.get'&&params&&params.invoice_id){const id=params.invoice_id,g=RG;return apiRaw(action,params).then(d=>{if(g===RG)DC[id]={t:Date.now(),d:d};return d;});}
+ return apiRaw(action,params);}
+function peekDetail(id){const h=DC[id];return h&&Date.now()-h.t<600000?h.d:null;}// detail yang sudah dimuat di latar belakang: tampil instan, lalu selalu diperbarui dari server
+function prefetchInv(rows){if(Date.now()-lastPF<180000||!rows||!rows.length)return;lastPF=Date.now();const ids=rows.filter(x=>x.state!=='Cancelled').slice(0,6).map(x=>x.invoice_id);let i=0;
+ const next=()=>{if(i>=ids.length||document.hidden)return;const id=ids[i++];if(DC[id]&&Date.now()-DC[id].t<120000){next();return;}api('invoices.get',{invoice_id:id}).catch(()=>{}).then(()=>setTimeout(next,350));};setTimeout(next,1500);}
+async function apiRaw(action,params){
  if(!S.sess&&(!S.token||S.exp-60000<Date.now()))await ensureFresh();
  let res,j;
- if(!NOREQ.test(action)){S.cache={};ls.del(INV_KEY);}// setelah tulis (impor/bayar/dll) buang cache agar tampilan tidak basi
+ if(!NOREQ.test(action)){S.cache={};RC={};DC={};RG++;S.invStale=true;}// setelah tulis: salinan di perangkat tetap dipakai sebagai tampilan sementara, lalu langsung diperbarui dari server
  try{res=await fetch(C.apiUrl,{method:'POST',body:JSON.stringify(Object.assign(S.sess?{session:S.sess}:{idToken:S.token},{action:action,params:params||{},request_id:NOREQ.test(action)?undefined:uuid()}))});}
  catch(e){throw new Error('Tidak bisa menghubungi server. Periksa koneksi internet.');}
  try{j=await res.json();}catch(e){throw new Error('Respons server tidak valid.');}
  if(!j.ok){if(/^Aksi tidak dikenal/.test(j.error||''))throw new Error('Backend belum diperbarui ke versi R1. Tempel kode Apps Script terbaru lalu buat versi deployment baru.');if(/Token|Belum login|Akun tidak diizinkan|^Sesi (tidak valid|berakhir)/.test(j.error||'')){logout(/Akun tidak/.test(j.error)?'Akun ini tidak diizinkan memakai AeneFlow.':(/^Sesi berakhir/.test(j.error)?'Sesi berakhir. Silakan masuk lagi.':'Sesi tidak valid. Silakan masuk lagi.'),true);}throw new Error(j.error||'Terjadi kesalahan');}
  return j.data;}
 function logout(msg,local){const s=S.sess;if(s&&!local){try{fetch(C.apiUrl,{method:'POST',body:JSON.stringify({session:s,action:'session.revoke',params:{session:s}}),keepalive:true}).catch(()=>{});}catch(e){}}
- S.sess='';ls.del(SESS_KEY);dropCaches();S.token='';S.exp=0;S.boot=null;S.cache={};try{google.accounts.id.disableAutoSelect();}catch(e){}$('app').hidden=true;showLogin(msg||'');}
+ S.sess='';ls.del(SESS_KEY);dropCaches();S.token='';S.exp=0;S.boot=null;S.cache={};RC={};DC={};RG++;lastPF=0;try{google.accounts.id.disableAutoSelect();}catch(e){}$('app').hidden=true;showLogin(msg||'');}
 async function logoutAll(){try{await api('session.revoke_all');}catch(e){}logout('Anda sudah keluar dari semua perangkat.',true);}
 function waitGoogle(){return new Promise((res,rej)=>{let n=0;const t=setInterval(()=>{if(window.google&&google.accounts&&google.accounts.id){clearInterval(t);res();}else if(++n>100){clearInterval(t);rej(new Error('Google Sign-In tidak bisa dimuat. Periksa koneksi internet lalu muat ulang.'));}},100);});}
 function showLogin(msg,noBtn){$('splash').hidden=true;const l=$('login');l.hidden=false;l.textContent='';
@@ -52,13 +65,13 @@ function showLogin(msg,noBtn){$('splash').hidden=true;const l=$('login');l.hidde
 async function enter(){$('login').hidden=true;
  const cb=S.sess?lsJson(BOOT_KEY):null;
  if(cb&&cb.user&&cb.settings!==undefined){// tampil instan dari salinan tersimpan, lalu perbarui diam-diam
-  S.boot=cb;$('splash').hidden=true;$('app').hidden=false;buildNav();render();
+  S.boot=cb;$('splash').hidden=true;$('app').hidden=false;buildNav();render();prefetch();
   api('bootstrap').then(b=>{ls.set(BOOT_KEY,JSON.stringify(b));if(JSON.stringify(b)!==JSON.stringify(S.boot)){S.boot=b;render();}}).catch(()=>{});return;}
  $('splash').hidden=false;
  try{S.boot=await api('bootstrap');}catch(e){if(!S.token&&!S.sess)return;if(S.sess&&!/Sesi|Token|login/.test(e.message)){$('splash').hidden=true;showLogin(e.message,true);return;}S.token='';$('splash').hidden=true;showLogin(e.message);return;}
  if(!S.sess){try{const r=await api('session.create');if(r&&r.session){S.sess=r.session;ls.set(SESS_KEY,r.session);}}catch(e){}}// gagal (mis. backend lama) = tetap bisa dipakai, hanya perlu login tiap kali
  if(S.sess)ls.set(BOOT_KEY,JSON.stringify(S.boot));
- $('splash').hidden=true;$('app').hidden=false;buildNav();render();}
+ $('splash').hidden=true;$('app').hidden=false;buildNav();render();prefetch();}
 
 // ---------- navigasi ----------
 const NAV=[['home','Home'],['cashflow','Cashflow'],['more','More']];
@@ -151,8 +164,8 @@ async function vHome(el,my){
   if(!rows.length){list.appendChild(empty(S.tab==='Cancelled'&&!q?'Belum ada invoice dibatalkan':FUL[S.tab]&&!q?'Belum ada pesanan di tab '+((TABS.find(t=>t[0]===S.tab)||[])[1]||S.tab):(all.length?'Tidak ada invoice':'Belum ada invoice'),S.tab==='Cancelled'&&!q?'Invoice yang dibatalkan akan tampil di tab ini.':all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
   rows.slice(0,300).forEach(x=>list.appendChild(rowEl(x)));
   if(rows.length>300)list.appendChild(h('p',{class:'sub'},'Menampilkan 300 pertama dari '+rows.length+'. Gunakan pencarian untuk mempersempit.'));}
- drawSum();paint();
- if(stale)api('invoices.list').then(n=>{S.cache.inv=n;ls.set(INV_KEY,JSON.stringify(n));if(my!==S.seq)return;S.invStale=false;all=n;note.remove();drawSum();paint();}).catch(()=>{if(my===S.seq)note.textContent='Tidak bisa memperbarui. Menampilkan data tersimpan.';});
+ drawSum();paint();if(!stale)prefetchInv(all);
+ if(stale)api('invoices.list').then(n=>{S.cache.inv=n;ls.set(INV_KEY,JSON.stringify(n));if(my!==S.seq)return;S.invStale=false;all=n;note.remove();drawSum();paint();prefetchInv(n);}).catch(()=>{if(my===S.seq)note.textContent='Tidak bisa memperbarui. Menampilkan data tersimpan.';});
  const f=h('button',{class:'fab',type:'button','aria-label':'Buat invoice baru',onclick:()=>{location.hash='#/invoice-edit';}},'+');document.body.appendChild(f);}
 async function vMore(el,my){const b=S.boot,s=b.settings||{};
  el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',{class:'mark','aria-hidden':'true',style:'width:56px;height:56px;font-size:22px'},initials(s.business_name)),h('div',{style:'flex:1;min-width:0'},h('div',{style:'font:700 22px var(--serif)'},s.business_name||'AeneFlow'),h('div',{class:'sub'},b.user.email+' · '+b.user.role)))));
@@ -172,7 +185,8 @@ async function vSettings(el){const owner=S.boot.user.role==='owner';
 async function vImport(el){if(S.boot.user.role!=='owner')return el.appendChild(empty('Khusus pemilik','Hanya pemilik yang boleh mengimpor data.'));
  if(!window.AeneImport)return el.appendChild(h('div',{class:'banner',role:'alert'},'Modul impor tidak termuat.'));window.AeneImport.mount(el,{api:api});}
 window.AeneApp={api:api,logout:logout,logoutAll:logoutAll};
-const A={payStatus:payStatus,PILL:PILL,eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
+function compsOf(i){if(!i||!i.components_json)return[];try{const a=JSON.parse(i.components_json);return Array.isArray(a)?a:[];}catch(e){return[];}}// isi set dari baris invoice (Versi 18)
+const A={compsOf:compsOf,peekDetail:peekDetail,payStatus:payStatus,PILL:PILL,eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
 (window.AeneModules||[]).forEach(f=>{try{f(A);}catch(e){console.error('Modul gagal dimuat',e);}});
 
 // ---------- mulai ----------
@@ -186,7 +200,13 @@ function showSetup(msg){$('splash').hidden=true;const l=$('login');l.hidden=fals
  l.appendChild(h('div',{class:'panel setup'},h('img',{class:'mark-img',src:'icon-192.png',alt:'',width:'72',height:'72'}),h('h1',{class:'brand'},'AeneFlow'),h('p',{class:'tag'},'Konfigurasi perangkat'),
   h('p',{class:'sub',style:'margin:12px 0'},'Isi sekali di perangkat ini. Kedua nilai ini bukan kata sandi dan hanya disimpan di perangkat ini.'),
   h('label',null,'Alamat Web App',api_),h('label',null,'Client ID Google',cid),err,h('button',{class:'btn pri',type:'button',onclick:save},'Simpan')));}
+function warm(){try{if(C.apiUrl)fetch(C.apiUrl,{mode:'no-cors',cache:'no-store'}).catch(()=>{});}catch(e){}}// bangunkan server Google sebelum permintaan pertama
+let hiddenAt=0;document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=Date.now();}else if(hiddenAt&&Date.now()-hiddenAt>120000){warm();hiddenAt=0;}});
+function prefetch(){if(!S.sess&&!S.token)return;const run=()=>{api('customers.list').catch(()=>{});api('products.list').catch(()=>{});};setTimeout(run,1200);}
+if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had)toast('Versi baru siap. Muat ulang halaman untuk memakainya.');});}
 async function start(){
+ if(window.top!==window.self){try{window.top.location=window.self.location;}catch(e){}document.documentElement.hidden=true;return;}// anti-clickjacking: tidak mau dibuka di dalam frame situs lain
+ warm();
  if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))navigator.serviceWorker.register('sw.js').catch(()=>{});
  if(!C.apiUrl||!C.clientId){showSetup('');return;}
  S.sess=ls.get(SESS_KEY)||'';

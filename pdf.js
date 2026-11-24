@@ -54,7 +54,9 @@ async function build(v,s){
  const cNo=M+8,cDesc=M+30,cQty=R-190,cPrice=R-92,cAmt=R-8,dW=cQty-cDesc-30;
  const head=()=>{page.drawRectangle({x:M,y:y-17,width:CW,height:22,color:blush});tx('NO',cNo,y-9,8,B,mute);tx('DESKRIPSI',cDesc,y-9,8,B,mute);tx('QTY',cQty,y-9,8,B,mute,true);tx('HARGA',cPrice,y-9,8,B,mute,true);tx('JUMLAH',cAmt,y-9,8,B,mute,true);y-=28;};
  head();
- v.items.forEach((i,k)=>{const nm=wrap(B,9.5,i.name,dW),ds=i.description?wrap(F,8.5,i.description,dW):[],hh=nm.length*12+ds.length*11+10;
+ const qf=n=>String(Math.round(Number(n)*1000)/1000).replace('.',',');
+ const isiTxt=i=>{const c=A.compsOf(i);return c.length?'Isi: '+c.map(x=>x.name+' x'+qf(x.qty)).join(', '):'';};// isi set, tanpa harga/modal
+ v.items.forEach((i,k)=>{const nm=wrap(B,9.5,i.name,dW),dd=[i.description||'',isiTxt(i)].filter(Boolean).join(' | '),ds=dd?wrap(F,8.5,dd,dW):[],hh=nm.length*12+ds.length*11+10;
   if(need(hh+8))head();
   let yy=y;tx(String(k+1),cNo,yy,9,F,mute);nm.forEach(l=>{tx(l,cDesc,yy,9.5,B,ink);yy-=12;});ds.forEach(l=>{tx(l,cDesc,yy,8.5,F,mute);yy-=11;});
   tx(String(i.qty)+' '+(i.unit||''),cQty+30,y,9,F,ink,true);tx(money(i.unit_price),cPrice,y,9,F,ink,true);tx(money(Math.round(i.qty*i.unit_price)),cAmt,y,9.5,B,ink,true);
@@ -125,7 +127,8 @@ async function suratJpeg(v,s,opt){
  const FONT='Helvetica, Arial, sans-serif',rose='#8b495a',ink='#2e2929',mute='#756b6b',ln='#e6d5d9',blush='#faf2f4';
  const fnt=(b,sz)=>(b?'bold ':'')+sz+'px '+FONT;
  let logo=null;if(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/]+={0,2}$/.test(s.business_logo||'')){try{logo=await loadImg(s.business_logo);}catch(e){logo=null;}}
- const items=v.items.map(i=>({name:String(i.name||''),desc:i.description||'',qty:(String(i.qty)+' '+(i.unit||'')).trim()}));
+ const qf=n=>String(Math.round(Number(n)*1000)/1000).replace('.',',');
+ const items=v.items.map(i=>{const cs=A.compsOf(i);return{name:String(i.name||''),desc:i.description||'',qty:(String(i.qty)+' '+(i.unit||'')).trim(),lines:cs.map(c=>'• '+c.name+': '+qf(Number(i.qty)*Number(c.qty))+' '+(c.unit||'pcs'))};});
  A.extrasOf(iv).forEach(l=>{if(l&&l.name&&Number(l.unit_price)>=0)items.push({name:String(l.name),desc:'',qty:String(l.qty)+' pcs'});});
  const ship=toJakarta?'Dikirim ke alamat '+(s.business_name||'kami')+' di Jakarta':'Dikirim langsung ke alamat pelanggan';
  const draw=(c,dry)=>{
@@ -155,7 +158,7 @@ async function suratJpeg(v,s,opt){
   // tabel item (tanpa harga)
   const cNo=M+8,cDesc=M+34,cQty=R-8,dW=cQty-cDesc-90;
   rect(M,y,CW,22,blush);tx('NO',cNo,y+14,8,true,mute);tx('ITEM & SPESIFIKASI',cDesc,y+14,8,true,mute);tx('JUMLAH',cQty,y+14,8,true,mute,true);y+=30;
-  items.forEach((i,k)=>{const nm=wrapC(i.name,10,true,dW),ds=i.desc?wrapC(i.desc,9,false,dW):[],hh=nm.length*13+ds.length*11+10;
+  items.forEach((i,k)=>{const nm=wrapC(i.name,10,true,dW),ds=(i.desc?wrapC(i.desc,9,false,dW):[]).concat(...(i.lines||[]).map(l=>wrapC(l,9,false,dW))),hh=nm.length*13+ds.length*11+10;
    let yy=y+10;tx(String(k+1),cNo,yy,9,false,mute);nm.forEach(l=>{tx(l,cDesc,yy,10,true,ink);yy+=13;});ds.forEach(l=>{tx(l,cDesc,yy,9,false,mute);yy+=11;});
    tx(i.qty,cQty,y+10,10,true,ink,true);y+=hh;line(M,y+2,R,ln,.5);y+=6;});
   y+=10;
@@ -205,7 +208,7 @@ function suratSheet(v){const iv=v.invoice;let url='';
 
 // ---- Surat Jalan: gambar JPEG ukuran 1/2 A4 (A5 landscape, 2480x1748 px = 300 dpi) untuk dicetak & ditempel di paket. TANPA harga. Selalu ke alamat pelanggan. ----
 function jalanModel(v,s){s=s||{};const iv=v.invoice;
- const items=v.items.map(i=>({name:String(i.name||''),qty:(String(i.qty)+' '+(i.unit||'')).trim()}));
+ const items=v.items.map(i=>{const cs=A.compsOf(i);return{name:String(i.name||'')+(cs.length?' (isi: '+cs.map(c=>c.name+' x'+String(Math.round(Number(c.qty)*1000)/1000).replace('.',',')).join(', ')+')':''),qty:(String(i.qty)+' '+(i.unit||'')).trim()};});
  A.extrasOf(iv).forEach(l=>{if(l&&l.name)items.push({name:String(l.name),qty:String(l.qty)+' pcs'});});
  return{to:{name:iv.cust_name||'',org:iv.cust_org||'',address:iv.cust_address||'',phone:iv.cust_whatsapp?('Telp/WA '+waShow(iv.cust_whatsapp)):''},items:items,
   from:{name:s.business_name||'',phone:s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',ig:s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):''}};}

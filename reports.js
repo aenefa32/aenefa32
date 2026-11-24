@@ -36,7 +36,8 @@ function buildXlsx(r){const H=t=>({h:t}),k=r.kpi,sheets=[
   [H('Pesanan')],['Belum diproses',r.orders.new],['Dalam Produksi',r.orders.production],['Siap Kirim',r.orders.ready],['Dikirim',r.orders.shipped],['Selesai (Dikirim + Lunas)',r.orders.completed],[],
   [H('Piutang jatuh tempo')],['Belum jatuh tempo',r.aging.current],['Terlambat 1-7 hari',r.aging.d1_7],['Terlambat > 7 hari',r.aging.d8p],[],
   [H('Pelanggan teratas'),H('Omzet'),H('Invoice')],...r.top_customers.map(c=>[c.name+(c.org?' · '+c.org:''),c.omzet,c.count]),[],
-  [H('Produk terlaris'),H('Qty'),H('Nilai item')],...r.top_products.map(p=>[p.name,p.qty,p.omzet])],[34,22,16]],
+  [H('Produk terjual'),H('Satuan'),H('Di dalam set'),H('Total')],...r.products_sold.map(p=>[p.name,p.single,p.inset,p.total]),[],
+  [H('Set terjual'),H('Jumlah set'),H('Nilai')],...r.sets_sold.map(p=>[p.name,p.qty,p.omzet])],[34,22,16,16]],
  ['Per Bulan',[[H('Bulan'),H('Omzet'),H('Diterima'),H('Laba kotor'),H('Invoice')],...r.months.map(m=>[m.month,m.omzet,m.diterima,m.laba,m.count])],[12,16,16,16,10]],
  ['Invoice',[[H('Nomor'),H('Tanggal'),H('Jatuh tempo'),H('Pelanggan'),H('Instansi'),H('Total'),H('Dibayar'),H('Sisa'),H('Status bayar'),H('Status pesanan')],...r.invoices.map(i=>[i.invoice_number,i.issue_date,i.due_date,i.customer,i.organization,i.total,i.paid,i.balance,i.payment_status,i.order_status])],[18,12,12,24,24,14,14,14,14,16]]];
  const files=[['[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>'],
@@ -71,8 +72,10 @@ async function vReports(el,my){
  const top=r.top_customers,mc=Math.max(1,...top.map(c=>c.omzet));
  box.appendChild(h('h2',{class:'sec'},'Pelanggan teratas'));
  box.appendChild(h('div',{class:'card',id:'rp-cust'},...top.map(c=>h('div',{style:'margin-bottom:8px'},row(c.name+(c.org?' · '+c.org:''),rp(c.omzet)),h('div',{class:'bar2'},h('i',{style:'width:'+Math.round(c.omzet/mc*100)+'%'}))))));
- box.appendChild(h('h2',{class:'sec'},'Produk terlaris'));
- box.appendChild(h('div',{class:'card',id:'rp-prod'},...r.top_products.map(p=>row(p.name,ui.fmt(p.qty)+' pcs'))));
+ box.appendChild(h('h2',{class:'sec'},'Produk terjual'));
+ box.appendChild(h('div',{class:'sub',id:'rp-units'},'Total unit terjual: '+ui.fmt(r.units.total)+' (satuan '+ui.fmt(r.units.single)+' + dalam set '+ui.fmt(r.units.inset)+')'));
+ box.appendChild(h('div',{class:'card',id:'rp-prod'},...r.products_sold.map(p=>row(p.name,ui.fmt(p.total)+(p.inset?' ('+ui.fmt(p.single)+' + '+ui.fmt(p.inset)+' di set)':''))))) ;
+ if(r.sets_sold.length){box.appendChild(h('h2',{class:'sec'},'Set terjual'));box.appendChild(h('div',{class:'card',id:'rp-sets'},...r.sets_sold.map(p=>row(p.name,ui.fmt(p.qty)+' set · '+rp(p.omzet)))));}
  box.appendChild(h('h2',{class:'sec'},'Ekspor'));
  const dl=h('button',{class:'btn',type:'button',id:'rp-xlsx',style:'width:100%'},'Unduh Excel (.xlsx)');
  dl.addEventListener('click',async()=>{try{const blob=buildXlsx(r),name='AeneFlow-Laporan-'+(r.period.from||'semua')+'-'+(r.period.to||r.today)+'.xlsx';let file=null;try{file=new File([blob],name,{type:blob.type});}catch(e){}
