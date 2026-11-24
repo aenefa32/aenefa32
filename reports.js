@@ -33,7 +33,7 @@ function sheetXml(rows,widths){let x='<?xml version="1.0" encoding="UTF-8" stand
  return x+'</sheetData></worksheet>';}
 function buildXlsx(r){const H=t=>({h:t}),k=r.kpi,sheets=[
  ['Ringkasan',[[H('Business Reports'+((S.boot&&S.boot.settings&&S.boot.settings.business_name)?' - '+S.boot.settings.business_name:''))],[H('Periode'),(r.period.from||'awal')+' s/d '+(r.period.to||r.today)],[],[H('Omzet'),k.omzet],[H('Diterima'),k.diterima],[H('Piutang (belum bayar)'),k.piutang],[H('Jumlah invoice terbit'),k.invoice_count],[H('Laba kotor'),k.laba_kotor],[H('Margin (%)'),k.margin_pct==null?'-':k.margin_pct],[H('Cakupan harga modal (%)'),k.cost_coverage_pct],[],
-  [H('Pesanan')],['Belum diproses',r.orders.new],['In Production',r.orders.production],['Ready to Ship',r.orders.ready],['Shipped',r.orders.shipped],['Completed (Shipped + Lunas)',r.orders.completed],[],
+  [H('Pesanan')],['Belum diproses',r.orders.new],['Dalam Produksi',r.orders.production],['Siap Kirim',r.orders.ready],['Dikirim',r.orders.shipped],['Selesai (Dikirim + Lunas)',r.orders.completed],[],
   [H('Piutang jatuh tempo')],['Belum jatuh tempo',r.aging.current],['Terlambat 1-7 hari',r.aging.d1_7],['Terlambat > 7 hari',r.aging.d8p],[],
   [H('Pelanggan teratas'),H('Omzet'),H('Invoice')],...r.top_customers.map(c=>[c.name+(c.org?' · '+c.org:''),c.omzet,c.count]),[],
   [H('Produk terlaris'),H('Qty'),H('Nilai item')],...r.top_products.map(p=>[p.name,p.qty,p.omzet])],[34,22,16]],
@@ -65,7 +65,7 @@ async function vReports(el,my){
  box.appendChild(h('div',{class:'card'},h('div',{class:'rp-bars',id:'rp-bars'},...r.months.map(m=>h('div',null,h('i',{style:'height:'+Math.max(4,Math.round(m.omzet/mx*100))+'px','aria-label':monLabel(m.month)+' '+rp(m.omzet)}),h('span',{class:'sub'},monLabel(m.month)),h('small',null,rp(m.omzet))))),
   h('p',{class:'sub'},'Omzet = total invoice terbit (tanpa yang dibatalkan), menurut tanggal terbit.')));
  box.appendChild(h('h2',{class:'sec'},'Pesanan'));
- box.appendChild(h('div',{class:'card',id:'rp-orders'},row('Belum diproses',r.orders.new),row('In Production',r.orders.production),row('Ready to Ship',r.orders.ready),row('Shipped',r.orders.shipped),row('Completed (Shipped + Lunas)',r.orders.completed)));
+ box.appendChild(h('div',{class:'card',id:'rp-orders'},row('Belum diproses',r.orders.new),row('Dalam Produksi',r.orders.production),row('Siap Kirim',r.orders.ready),row('Dikirim',r.orders.shipped),row('Selesai (Dikirim + Lunas)',r.orders.completed)));
  box.appendChild(h('h2',{class:'sec'},'Piutang jatuh tempo'));
  box.appendChild(h('div',{class:'card',id:'rp-aging'},row('Belum jatuh tempo',rp(r.aging.current)),row('Terlambat 1–7 hari',rp(r.aging.d1_7),r.aging.d1_7?'warnv':''),row('Terlambat > 7 hari',rp(r.aging.d8p),r.aging.d8p?'warnv':'')));
  const top=r.top_customers,mc=Math.max(1,...top.map(c=>c.omzet));

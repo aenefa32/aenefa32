@@ -2,7 +2,7 @@
 (window.AeneModules=window.AeneModules||[]).push(function(A){'use strict';
 const h=A.h,ui=A.ui,rp=A.rp,fdate=A.fdate,S=A.S,api=A.api,calc=window.AeneCalc.calcTotals;
 const METHODS=['BCA','BRI','Mandiri'];
-const PILL={Paid:['p-paid','Paid'],'Partially Paid':['p-part','Partially Paid'],Unpaid:['p-unpaid','Unpaid'],Overdue:['p-over','Overdue'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Cancelled']};
+const PILL={Paid:['p-paid','Lunas'],'Partially Paid':['p-part','Dibayar Sebagian'],Unpaid:['p-unpaid','Belum Dibayar'],Overdue:['p-over','Jatuh Tempo'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Dibatalkan']};
 const pill=s=>{const p=PILL[s]||['p-draft',s];return h('span',{class:'pill '+p[0]},p[1]);};
 const blankItem=()=>({item_id:'',product_id:'',name:'',description:'',unit:'pcs',qty:1,unit_price:0,cost_price:''});
 function setting(k,d){const v=S.boot&&S.boot.settings?S.boot.settings[k]:undefined;return v===undefined||v===''?d:v;}
@@ -120,7 +120,7 @@ async function vDetail(el,my){
 function draw(el,v,my){const iv=v.invoice,t=v.totals,owner=S.boot.user.role==='owner',errBox=h('div');el.textContent='';el.appendChild(errBox);
  const reload=async()=>{S.cache={};const n=await api('invoices.get',{invoice_id:iv.invoice_id});draw(el,n,my);};
  const act=async(btn,fn)=>{await ui.run(btn,async()=>{const n=await fn();S.cache={};draw(el,n,my);},m=>ui.banner(errBox,m));};
- el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',null,h('div',{class:'sub'},iv.invoice_number),h('div',{class:'big',id:'d-cust'},iv.cust_name),iv.cust_org?h('div',{class:'sub'},iv.cust_org):null),pill(v.payment_status)),
+ el.appendChild(h('div',{class:'hero'},h('div',{class:'row'},h('div',null,h('div',{class:'sub'},iv.invoice_number),h('div',{class:'big',id:'d-cust'},iv.cust_name),iv.cust_org?h('div',{class:'sub'},iv.cust_org):null),pill(A.payStatus(v.payment_status,v.totals.grand_total,v.balance))),
   h('div',{class:'row hero-b',style:'margin-top:10px;align-items:flex-end'},h('div',{class:'sub hero-c',id:'d-contact'},iv.cust_address?h('div',{id:'d-addr'},iv.cust_address):null,iv.cust_whatsapp?h('div',{id:'d-wa'},iv.cust_whatsapp):null),h('b',{class:'big hero-t',id:'d-total'},rp(t.grand_total)))));
  if(iv.state==='Cancelled')el.appendChild(h('div',{class:'banner'},'Invoice dibatalkan'+(iv.cancelled_reason?': '+iv.cancelled_reason:'')+'.'));
  if(iv.state==='Issued'){el.appendChild(h('div',{class:'kpis two'},h('div',{class:'kpi'},h('span',{class:'sub'},'Dibayar'),h('b',{id:'d-paid'},rp(v.paid))),h('div',{class:'kpi'},h('span',{class:'sub'},'Sisa'),(v.balance===0?h('b',{id:'d-bal',class:'lunas'},'✓ Lunas'):h('b',{id:'d-bal'},rp(v.balance))))));}
@@ -171,7 +171,7 @@ function orderCard(v,reload,errBox){const iv=v.invoice,o=v.order,can=iv.state===
  const dl=h('div',{class:'row',style:'margin-top:6px'},h('span',{class:'sub',id:'d-deadline'},'Deadline: '+(o.deadline_date?fdate(o.deadline_date):'belum diatur')),can?h('button',{class:'linkbtn',type:'button',id:'o-dl',onclick:()=>dlForm(v,reload)},o.deadline_date?'Ubah':'Atur'):null);card.appendChild(dl);
  if(ship)card.appendChild(h('div',{class:'row'},h('span',{class:'sub',id:'d-shipdate'},'Dikirim: '+fdate(ship.ship_date)),can?h('button',{class:'linkbtn',type:'button',id:'o-sd',onclick:()=>shipForm({invoice_id:iv.invoice_id,ver:ordVer(o),ship_date:ship.ship_date},reload)},'Ubah'):null));
  if(can){card.appendChild(h('div',{class:'chips ordchips',role:'group','aria-label':'Ubah status pesanan'},...ORD_ST.map(st=>h('button',{class:'chip '+A.OST[st][1],type:'button','data-st':st,'aria-pressed':String(o.fulfillment_status===st),onclick:()=>setStatus({invoice_id:iv.invoice_id,ver:ordVer(o),cur:o.fulfillment_status,balance:v.balance},st,reload,m=>ui.banner(errBox,m))},A.OST[st][0]))));
-  card.appendChild(h('div',{class:'sub'},'Status bisa dimajukan atau dikembalikan bila salah ketuk. Completed otomatis saat pesanan Shipped dan invoice sudah lunas.'));}
+  card.appendChild(h('div',{class:'sub'},'Status bisa dimajukan atau dikembalikan bila salah ketuk. Selesai otomatis saat pesanan Dikirim dan invoice sudah lunas.'));}
  else card.appendChild(h('div',{class:'sub'},'Status tidak bisa diubah karena invoice belum terbit atau sudah dibatalkan.'));
  return card;}
 function dlForm(v,reload){const iv=v.invoice,o=v.order;ui.sheet('Deadline pesanan',(b,close)=>{const dt=h('input',{type:'date',value:o.deadline_date||'','aria-label':'Deadline',id:'o-dlin'});b.appendChild(ui.field('Deadline selesai',dt));
@@ -181,10 +181,10 @@ let ordBusy=false;
 async function setStatus(info,st,done,fail){if(ordBusy||info.cur===st)return;
  if(st==='Shipped'){shipForm(Object.assign({fromStatus:true},info),done,fail);return;}
  ordBusy=true;if(info.opt){// tampilan berubah seketika; server menyusul di latar belakang
-  info.opt(st);try{const r=await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});if(info.ok)info.ok(r&&r.order?ordVer(r.order):null);A.toast('Status: '+st);}catch(e){if(info.undo)info.undo();if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}return;}
- try{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});A.toast('Status: '+st);await done();}catch(e){if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}}
+  info.opt(st);try{const r=await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});if(info.ok)info.ok(r&&r.order?ordVer(r.order):null);A.toast('Status: '+((A.OST[st]||[st])[0]).replace(/^\u2713 /,''));}catch(e){if(info.undo)info.undo();if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}return;}
+ try{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:st});A.toast('Status: '+((A.OST[st]||[st])[0]).replace(/^\u2713 /,''));await done();}catch(e){if(fail)fail(e.message);else A.toast(e.message);}finally{ordBusy=false;}}
 function shipForm(info,reload,fail){ui.sheet('Tanggal kirim',(b,close)=>{const dt=h('input',{type:'date',value:info.ship_date||ui.today(),'aria-label':'Tanggal kirim',id:'o-sdin'});b.appendChild(ui.field('Tanggal kirim',dt));
- const go=h('button',{class:'btn pri',type:'button',id:'o-sdsave'},info.fromStatus?'Tandai Shipped':'Simpan');go.addEventListener('click',()=>ui.run(go,async()=>{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:'Shipped',ship_date:dt.value});close();A.toast('Status: Shipped');await reload();},m=>ui.banner(b,m)));
+ const go=h('button',{class:'btn pri',type:'button',id:'o-sdsave'},info.fromStatus?'Tandai Dikirim':'Simpan');go.addEventListener('click',()=>ui.run(go,async()=>{await api('orders.update',{invoice_id:info.invoice_id,ver:info.ver,status:'Shipped',ship_date:dt.value});close();A.toast('Status: Dikirim');await reload();},m=>ui.banner(b,m)));
  b.appendChild(h('div',{class:'btnrow'},h('button',{class:'btn',type:'button',onclick:close},'Batal'),go));});}
 A.setOrderStatus=setStatus;A.ORD_ST=ORD_ST;
 // Swipe kanan di Home: Lunas 1 ketuk (pilih rekening) atau bayar sebagian. info: {invoice_id,balance,paid,opt,ok,undo}

@@ -42,7 +42,7 @@ async function vCustDetail(el,my){const id=A.param('id');A.skel(el);
  el.appendChild(bar);if(c.notes)el.appendChild(h('div',{class:'card'},h('div',{class:'sub'},'Catatan'),h('div',{class:'pre'},c.notes)));
  el.appendChild(h('h2',{class:'sec'},'Riwayat invoice'));
  if(!mine.length)el.appendChild(h('p',{class:'sub'},'Belum ada invoice untuk pelanggan ini.'));
- mine.forEach(x=>el.appendChild(h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.invoice_number),h('div',{class:'sub'},fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('span',{class:'pill '+(PILL[x.payment_status]||'p-draft'),style:'margin-top:6px'},x.payment_status))));}
+ mine.forEach(x=>el.appendChild(h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.invoice_number),h('div',{class:'sub'},fdate(x.issue_date))),h('b',null,rp(x.grand_total))),(()=>{const ps=A.payStatus(x.payment_status,x.grand_total,x.balance),pp=A.PILL[ps]||['p-draft',ps];return h('span',{class:'pill '+pp[0],style:'margin-top:6px'},pp[1]);})())));}
 
 // ---------- produk ----------
 function prodForm(b,cur,done){cur=cur||{};const err=h('div');b.appendChild(err);

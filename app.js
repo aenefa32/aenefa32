@@ -88,18 +88,20 @@ function param(k){const q=(location.hash.split('?')[1]||'');const o=new URLSearc
 const skel=el=>{for(let i=0;i<4;i++)el.appendChild(h('div',{class:'skel'}));};
 
 // ---------- halaman ----------
-const OST={'New Order':['Belum diproses','o-new'],'In Production':['In Production','o-prod'],'Ready to Ship':['Ready to Ship','o-ready'],'Shipped':['Shipped','o-ship'],'Completed':['\u2713 Completed','o-done']};
+const OST={'New Order':['Belum diproses','o-new'],'In Production':['Dalam Produksi','o-prod'],'Ready to Ship':['Siap Kirim','o-ready'],'Shipped':['Dikirim','o-ship'],'Completed':['\u2713 Selesai','o-done']};
 // Completed = otomatis saat pesanan Shipped dan invoice Paid (atau status lama 'Completed' hasil impor)
 function effStatus(f,pay){return f==='Completed'||(f==='Shipped'&&pay==='Paid')?'Completed':f;}
+// Status 'Overdue' tidak ditampilkan: dianggap Belum Dibayar (atau Dibayar Sebagian bila sudah ada pembayaran)
+function payStatus(st,grand,bal){return st==='Overdue'?(Number(bal)<Number(grand)?'Partially Paid':'Unpaid'):st;}
 function ostPill(f,pay,id){const e=effStatus(f,pay),m=OST[e]||[e,'o-new'];return h('span',{class:'pill '+m[1],id:id||null},m[0]);}
-const PILL={Paid:['p-paid','Paid'],'Partially Paid':['p-part','Partially Paid'],Unpaid:['p-unpaid','Unpaid'],Overdue:['p-over','Overdue'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Cancelled']};
-const TABS=[['Invoices'],['Unpaid'],['Paid'],['Cancelled'],['Belum Diproses'],['In Production'],['Ready to Ship'],['Shipped'],['Completed']]
+const PILL={Paid:['p-paid','Lunas'],'Partially Paid':['p-part','Dibayar Sebagian'],Unpaid:['p-unpaid','Belum Dibayar'],Overdue:['p-over','Jatuh Tempo'],Draft:['p-draft','Draft'],Cancelled:['p-cancel','Dibatalkan']};
+const TABS=[['Invoices'],['Unpaid','Belum Dibayar'],['Paid','Lunas'],['Cancelled','Dibatalkan'],['Belum Diproses'],['In Production','Dalam Produksi'],['Ready to Ship','Siap Kirim'],['Shipped','Dikirim'],['Completed','Selesai']]
 const FUL={'Belum Diproses':'New Order','In Production':'In Production','Ready to Ship':'Ready to Ship','Shipped':'Shipped','Completed':'Completed'};;
 const OPEN=['Unpaid','Partially Paid','Overdue'];
 // ---------- baris invoice di Home: geser ke kiri = pilih status pesanan ----------
 const SWW=232,SWP=150;
 function closeSw(){if(S.openSw){S.openSw.classList.remove('open','openr');S.openSw=null;}}
-function rowCard(x){const p=PILL[x.payment_status]||['p-draft',x.payment_status],iss=x.state==='Issued'&&x.fulfillment_status,done=iss&&effStatus(x.fulfillment_status,x.payment_status)==='Completed';return h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pills'},h('span',{class:'pill '+p[0]},p[1]),iss?ostPill(x.fulfillment_status,x.payment_status):null),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null),iss?h('div',{class:'sub',style:'margin-top:6px;min-height:18px;padding-right:64px'},x.deadline_date&&!done&&x.fulfillment_status!=='Shipped'?'Deadline '+fdate(x.deadline_date):''):null);}
+function rowCard(x){const ps=payStatus(x.payment_status,x.grand_total,x.balance),p=PILL[ps]||['p-draft',ps],iss=x.state==='Issued'&&x.fulfillment_status,done=iss&&effStatus(x.fulfillment_status,x.payment_status)==='Completed';return h('a',{class:'item lnk',href:'#/invoice?id='+encodeURIComponent(x.invoice_id)},h('div',{class:'row'},h('div',null,h('b',null,x.cust_name),h('div',{class:'sub'},x.invoice_number+' · '+fdate(x.issue_date))),h('b',null,rp(x.grand_total))),h('div',{class:'row',style:'margin-top:8px'},h('span',{class:'pills'},h('span',{class:'pill '+p[0]},p[1]),iss?ostPill(x.fulfillment_status,x.payment_status):null),x.balance>0&&x.state==='Issued'?h('span',{class:'sub'},'Sisa '+rp(x.balance)):null),iss?h('div',{class:'sub',style:'margin-top:6px;min-height:18px;padding-right:64px'},x.deadline_date&&!done&&x.fulfillment_status!=='Shipped'?'Deadline '+fdate(x.deadline_date):''):null);}
 function rowEl(x){const card=rowCard(x);if(!(x.state==='Issued'&&x.fulfillment_status&&x.order_ver&&A.setOrderStatus&&A.ORD_ST))return card;
  const info=()=>{const prev=x.fulfillment_status,list=S.cache.inv;// api() membuang cache setelah tulis; salinan ini dipulihkan agar tampilan tidak berkedip
   const keep=()=>{if(list){S.cache.inv=list;ls.set(INV_KEY,JSON.stringify(list));}};
@@ -132,7 +134,7 @@ function rowEl(x){const card=rowCard(x);if(!(x.state==='Issued'&&x.fulfillment_s
  card.addEventListener('click',e=>{if(swallow){e.preventDefault();e.stopPropagation();return;}if(wrap.classList.contains('open')||wrap.classList.contains('openr')){e.preventDefault();closeSw();}},true);
  return wrap;}
 async function vHome(el,my){
- el.appendChild(h('div',{class:'chips',role:'group','aria-label':'Filter'},...TABS.map(t=>h('button',{class:'chip',type:'button','aria-pressed':String(S.tab===t[0]),onclick:()=>{S.tab=t[0];render();}},t[0]))));
+ el.appendChild(h('div',{class:'chips',role:'group','aria-label':'Filter'},...TABS.map(t=>h('button',{class:'chip',type:'button','aria-pressed':String(S.tab===t[0]),onclick:()=>{S.tab=t[0];render();}},t[1]||t[0]))));
  setTimeout(()=>{const c=el.querySelector('.chip[aria-pressed="true"]');if(c&&c.scrollIntoView)c.scrollIntoView({inline:'center',block:'nearest'});},0);
  if(S.showSearch){const i=h('input',{class:'search',type:'search',placeholder:'Cari nomor invoice atau nama pelanggan','aria-label':'Cari invoice',value:S.q,oninput:e=>{S.q=e.target.value;paint();}});el.appendChild(i);}
  const sum=h('div'),list=h('div'),note=h('p',{class:'sub',id:'h-stale'},'Memperbarui…');
@@ -146,7 +148,7 @@ async function vHome(el,my){
  function paint(){list.textContent='';const q=S.q.trim().toLowerCase();let rows=all.slice().sort((a,b)=>String(b.issue_date).localeCompare(String(a.issue_date))||String(b.invoice_number).localeCompare(String(a.invoice_number)));
   if(S.tab==='Unpaid')rows=rows.filter(x=>OPEN.indexOf(x.payment_status)>=0);else if(S.tab==='Paid')rows=rows.filter(x=>x.payment_status==='Paid');else if(S.tab==='Cancelled')rows=rows.filter(x=>x.state==='Cancelled');else if(FUL[S.tab])rows=rows.filter(x=>x.state==='Issued'&&effStatus(x.fulfillment_status,x.payment_status)===FUL[S.tab]);else rows=rows.filter(x=>x.state!=='Cancelled');
   if(q)rows=rows.filter(x=>String(x.invoice_number).toLowerCase().indexOf(q)>=0||String(x.cust_name).toLowerCase().indexOf(q)>=0);
-  if(!rows.length){list.appendChild(empty(S.tab==='Cancelled'&&!q?'Belum ada invoice dibatalkan':FUL[S.tab]&&!q?'Belum ada pesanan di tab '+S.tab:(all.length?'Tidak ada invoice':'Belum ada invoice'),S.tab==='Cancelled'&&!q?'Invoice yang dibatalkan akan tampil di tab ini.':all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
+  if(!rows.length){list.appendChild(empty(S.tab==='Cancelled'&&!q?'Belum ada invoice dibatalkan':FUL[S.tab]&&!q?'Belum ada pesanan di tab '+((TABS.find(t=>t[0]===S.tab)||[])[1]||S.tab):(all.length?'Tidak ada invoice':'Belum ada invoice'),S.tab==='Cancelled'&&!q?'Invoice yang dibatalkan akan tampil di tab ini.':all.length?'Coba filter atau kata kunci lain.':'Invoice yang dibuat atau diimpor akan tampil di sini.'));return;}
   rows.slice(0,300).forEach(x=>list.appendChild(rowEl(x)));
   if(rows.length>300)list.appendChild(h('p',{class:'sub'},'Menampilkan 300 pertama dari '+rows.length+'. Gunakan pencarian untuk mempersempit.'));}
  drawSum();paint();
@@ -170,7 +172,7 @@ async function vSettings(el){const owner=S.boot.user.role==='owner';
 async function vImport(el){if(S.boot.user.role!=='owner')return el.appendChild(empty('Khusus pemilik','Hanya pemilik yang boleh mengimpor data.'));
  if(!window.AeneImport)return el.appendChild(h('div',{class:'banner',role:'alert'},'Modul impor tidak termuat.'));window.AeneImport.mount(el,{api:api});}
 window.AeneApp={api:api,logout:logout,logoutAll:logoutAll};
-const A={eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
+const A={payStatus:payStatus,PILL:PILL,eff:effStatus,ostPill:ostPill,OST:OST,h:h,icon:icon,rp:rp,fdate:fdate,toast:toast,S:S,api:api,ROUTES:ROUTES,render:render,param:param,empty:empty,skel:skel,initials:initials};
 (window.AeneModules||[]).forEach(f=>{try{f(A);}catch(e){console.error('Modul gagal dimuat',e);}});
 
 // ---------- mulai ----------

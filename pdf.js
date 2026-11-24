@@ -41,7 +41,7 @@ async function build(v,s){
  let ly=y-(logo?Math.max(8,lh/2-8):8);tx(s.business_name||'Invoice',tl,ly,20,B,rose);ly-=17;
  [].concat(wrap(F,9,s.business_address||'',270-(tl-M)),[s.business_phone?('Telp/WA '+waShow(s.business_phone)):'',s.business_email||'',s.business_instagram?('ig @'+String(s.business_instagram).replace(/^@+/,'')):'']).forEach(l=>{if(l){tx(l,tl,ly,9,F,mute);ly-=12;}});
  let ry=y-8;tx('INVOICE',R,ry,22,B,ink,true);ry-=17;tx(iv.invoice_number,R,ry,11,B,rose,true);ry-=15;
- const st=STATUS[v.payment_status]||STATUS[iv.state]||'';if(st){tx(st,R,ry,9.5,B,v.payment_status==='Paid'?good:mute,true);ry-=13;}
+ const st=STATUS[A.payStatus(v.payment_status,v.totals.grand_total,v.balance)]||STATUS[iv.state]||'';if(st){tx(st,R,ry,9.5,B,v.payment_status==='Paid'?good:mute,true);ry-=13;}
  y=Math.min(ly,ry,logo?y-lh:1e9)-10;page.drawLine({start:{x:M,y:y},end:{x:R,y:y},thickness:.8,color:ln});y-=20;
  // pelanggan & tanggal
  const top=y;tx('DITAGIHKAN KEPADA',M,y,8,B,mute);y-=14;tx(iv.cust_name,M,y,11.5,B,ink);y-=14;
