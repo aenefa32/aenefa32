@@ -83,17 +83,19 @@ function prodForm(b,cur,done,prods){cur=cur||{};prods=prods||[];const err=h('div
  const sp=ui.money(Number(cur.sell_price)||0,null,{'aria-label':'Harga jual',id:'p-sell'}),cp=ui.money(0,null,{'aria-label':'Harga modal',id:'p-cost',placeholder:'kosong = belum diketahui'});cp.value=(cur.cost_price===''||cur.cost_price==null)?'':ui.fmt(Number(cur.cost_price));
  b.appendChild(ui.field('Nama produk *',f.name));b.appendChild(ui.field('Kategori',sel));b.appendChild(newBox);b.appendChild(h('div',{class:'grid2'},ui.field('Harga jual (Rp) *',sp),ui.field('Satuan',f.unit)));
  b.appendChild(ui.field('Harga modal (Rp, opsional)',cp,'Kosong = belum diketahui (item ini tidak ikut hitungan laba). 0 = memang tanpa modal.'));b.appendChild(ui.field('Deskripsi',f.description));
+ const phf=A.photos?A.photos.field(cur):null;if(phf)b.appendChild(phf.el);
  const go=h('button',{class:'btn pri',type:'button',id:'p-save'},'Simpan');
  go.addEventListener('click',()=>{if(sel.value==='__new'){ui.banner(b,'Simpan atau batalkan kategori baru dulu.');return;}
   const v={name:f.name.value.trim(),category:sel.value,unit:f.unit.value.trim()||'pcs',description:f.description.value.trim(),sell_price:ui.num(sp.value),cost_price:cp.value.trim()===''?'':ui.num(cp.value)};
   if(!v.name){ui.banner(b,'Nama produk wajib diisi.');return;}if(cur.product_id)v.product_id=cur.product_id;
-  ui.run(go,async()=>{await api('products.save',v);await done();},m=>ui.banner(b,m));});
+  ui.run(go,async()=>{const r=await api('products.save',v);if(!cur.product_id&&r&&r.id){cur.product_id=r.id;cur.photo_file_id=cur.photo_file_id||'';}// bila foto gagal, coba simpan lagi tidak membuat produk ganda
+   if(phf&&phf.changed()){try{await phf.apply(cur.product_id);}catch(e){throw new Error('Produk tersimpan, tetapi foto belum: '+e.message);}}await done();},m=>ui.banner(b,m));});
  b.appendChild(h('div',{class:'btnrow'},go));}
 
 let PCAT='*';// filter kategori di daftar produk ('*' = semua, '' = tanpa kategori)
 async function vProd(el,my){
  const q=h('input',{class:'search',type:'search',placeholder:'Cari produk atau kategori','aria-label':'Cari produk'}),list=h('div'),chips=h('div',{class:'chips',role:'group','aria-label':'Kategori'});let all=[];
- el.appendChild(h('div',{class:'row'},h('b',null,'Produk & katalog'),h('button',{class:'btn pri',type:'button',id:'p-new',onclick:()=>ui.sheet('Produk baru',(b,close)=>prodForm(b,null,async()=>{close();A.toast('Produk disimpan');A.render();},all))},'+ Produk')));
+ el.appendChild(h('div',{class:'row'},h('b',null,'Produk & katalog'),h('span',{style:'display:flex;gap:8px'},h('button',{class:'btn',type:'button',id:'p-pricelist',onclick:()=>A.pricelist?A.pricelist.open(all):A.toast('Pricelist belum termuat.')},'Pricelist'),h('button',{class:'btn pri',type:'button',id:'p-new',onclick:()=>ui.sheet('Produk baru',(b,close)=>prodForm(b,null,async()=>{close();A.toast('Produk disimpan');A.render();},all))},'+ Produk'))));
  el.appendChild(q);el.appendChild(chips);el.appendChild(list);A.skel(list);
  all=await api('products.list',{all:true});if(my!==S.seq)return;
  const same=(x,k)=>String(x.category||'').trim().toLowerCase()===String(k).toLowerCase();
@@ -105,10 +107,10 @@ async function vProd(el,my){
  function paint(){list.textContent='';const rows=all.filter(p=>hit(q.value,[p.name,p.category])&&(PCAT==='*'||(PCAT===''?!String(p.category||'').trim():same(p,PCAT))));
   if(!rows.length){list.appendChild(A.empty(all.length?'Tidak ditemukan':'Belum ada produk',all.length?'Coba kata kunci atau kategori lain.':'Tekan “+ Produk” untuk menambah.'));return;}
   rows.slice(0,300).forEach(x=>{const noCost=x.cost_price===''||x.cost_price==null;
-   list.appendChild(h('div',{class:'item'+(act(x)?'':' off')},h('div',{class:'row'},h('b',null,x.name),h('b',null,rp(x.sell_price))),h('div',{class:'sub'},[x.category,x.unit].filter(Boolean).join(' · ')),
+   list.appendChild(h('div',{class:'item pitem'+(act(x)?'':' off')},x.photo_file_id&&A.photos?A.photos.thumb(x.photo_file_id,56):null,h('div',{class:'pbody'},h('div',{class:'row'},h('b',null,x.name),h('b',null,rp(x.sell_price))),h('div',{class:'sub'},[x.category,x.unit].filter(Boolean).join(' · ')),
     h('div',{class:'row',style:'margin-top:6px'},h('span',{class:'sub'},noCost?'Modal belum diisi':'Modal '+rp(x.cost_price)),act(x)?null:h('span',{class:'pill p-cancel'},'Nonaktif')),
     h('div',{class:'btnrow'},h('button',{class:'linkbtn','data-edit':x.product_id,type:'button',onclick:()=>ui.sheet('Ubah produk',(b,close)=>prodForm(b,x,async()=>{close();A.toast('Perubahan disimpan');A.render();},all))},'Ubah'),
-     h('button',{class:'linkbtn','data-toggle':x.product_id,type:'button',onclick:async e=>{ui.run(e.currentTarget,async()=>{await api('products.set_active',{product_id:x.product_id,active:!act(x)});A.render();});}},act(x)?'Nonaktifkan':'Aktifkan'))));});}
+     h('button',{class:'linkbtn','data-toggle':x.product_id,type:'button',onclick:async e=>{ui.run(e.currentTarget,async()=>{await api('products.set_active',{product_id:x.product_id,active:!act(x)});A.render();});}},act(x)?'Nonaktifkan':'Aktifkan')))));});}
  q.addEventListener('input',paint);paintChips();paint();}
 
 A.ROUTES.customers={t:'Customers',nav:'more',back:'more',v:vCust};

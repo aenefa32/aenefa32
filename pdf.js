@@ -279,6 +279,6 @@ function jalanSheet(v){const iv=v.invoice;let url='';
   }).catch(e=>{status.textContent='';box.appendChild(h('div',{class:'banner',role:'alert'},'Gagal membuat gambar: '+(e&&e.message||e)));});
  },()=>{if(url)try{URL.revokeObjectURL(url);}catch(e){}});}
 
-A.pdf={build:build,jalanJpeg:jalanJpeg,jalanModel:jalanModel,suratJpeg:suratJpeg,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money};
+A.pdf={build:build,jalanJpeg:jalanJpeg,jalanModel:jalanModel,suratJpeg:suratJpeg,waText:waText,waLink:waLink,waNumber:waNumber,safeName:safeName,clean:clean,money:money,wrap:wrap};
 A.shareSheet=shareSheet;A.suratSheet=suratSheet;A.jalanSheet=jalanSheet;
 });
